@@ -40,6 +40,7 @@ static WNDPROC g_orig_event_handler;
 
 static void *g_base_addr;
 static bool g_fullscreen = false;
+static bool g_sel_fullscreen = false;
 
 struct app_data *g_pw_data;
 void (*pw_select_target)(int id);
@@ -137,41 +138,96 @@ u32_to_str(char *buf, uint32_t u32)
 }
 
 static void
-toggle_borderless_fullscreen(void) {
-	int fw, fh;
-
-	fw = GetSystemMetrics(SM_CXSCREEN);
-	fh = GetSystemMetrics(SM_CYSCREEN);
+toggle_borderless_fullscreen(void)
+{
+	static int x, y, w, h;
 
 	g_fullscreen = !g_fullscreen;
-	if (!g_fullscreen) {
+	if (g_fullscreen) {
+		int fw, fh;
+		RECT rect;
+
+		fw = GetSystemMetrics(SM_CXSCREEN);
+		fh = GetSystemMetrics(SM_CYSCREEN);
+
+		GetWindowRect(g_window, &rect);
+		x = rect.left;
+		y = rect.top;
+		w = rect.right - rect.left;
+		h = rect.bottom - rect.top;
+
 		/* WinAPI window styles when windowed on every win resize -> PW sets them on every resize */
 		patch_mem_u32(0x40beb5, 0x80000000);
 		patch_mem_u32(0x40beac, 0x80000000);
 		SetWindowLong(g_window, GWL_STYLE, 0x80000000);
 		SetWindowPos(g_window, HWND_TOP, 0, 0, fw, fh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
-	} else if (g_fullscreen) {
+	} else {
 		patch_mem_u32(0x40beb5, 0x80ce0000);
 		patch_mem_u32(0x40beac, 0x80ce0000);
 		SetWindowLong(g_window, GWL_STYLE, 0x80ce0000);
-		SetWindowPos(g_window, HWND_TOP, 0, 0, fw - 100, fh - 100, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+		SetWindowPos(g_window, HWND_TOP, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
 	}
+}
+
+static void __stdcall
+setup_fullscreen_combo(void *unk1, void *unk2, unsigned *is_fullscreen)
+{
+	unsigned __stdcall (*real_fn)(void *, void *, unsigned *) = (void *)0x6d5ba0;
+
+	*is_fullscreen = g_fullscreen;
+	real_fn(unk1, unk2, is_fullscreen);
+	*is_fullscreen = 0;
+}
+
+static unsigned __thiscall
+read_fullscreen_opt(void *unk1, void *unk2, void *unk3, void *unk4)
+{
+	unsigned __thiscall (*real_fn)(void *, void *, void *, void *) = (void *)0x6ff590;
+	unsigned is_fullscreen = real_fn(unk1, unk2, unk3, unk4);
+
+	g_sel_fullscreen = is_fullscreen;
+	fprintf(stderr, "fullscreen: %d\n", g_sel_fullscreen);
+	/* always return false */
+	return 0;
+}
+
+static unsigned __stdcall
+save_fullscreen_opt(void *unk1, void *unk2, unsigned is_fullscreen)
+{
+	unsigned __stdcall (*real_fn)(void *, void *, unsigned) = (void *)0x6ff810;
+	return real_fn(unk1, unk2, g_fullscreen);
 }
 
 /* button clicks / slider changes / etc */
 static unsigned __stdcall
-on_ui_change(const char *ctrl_name, void *win)
+on_ui_change(const char *ctrl_name, void *parent_win)
 {
-	const char *win_name = *(const char **)(win + 0x28);
-	fprintf(stderr, "ctrl: %s, win: %s\n", ctrl_name, win_name);
+	unsigned __stdcall (*real_fn)(const char *, void *) = (void *)0x6c9670;
+	const char *parent_name = *(const char **)(parent_win + 0x28);
 
-	if (strcmp(win_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
+	fprintf(stderr, "ctrl: %s, win: %s\n", ctrl_name, parent_name);
+
+	if (strcmp(parent_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
 		toggle_borderless_fullscreen();
 		return 1;
 	}
 
-	unsigned __stdcall (*real_fn)(const char *cmd, void *win) = (void *)0x6c9670;
-	return real_fn(ctrl_name, win);
+	unsigned ret = real_fn(ctrl_name, parent_win);
+
+	if (strcmp(parent_name, "Win_SettingSystem") == 0) {
+		if (strcmp(ctrl_name, "default") == 0) {
+			g_sel_fullscreen = false;
+		} else if (strcmp(ctrl_name, "IDCANCEL") == 0) {
+			g_sel_fullscreen = g_fullscreen;
+		} else if (strcmp(ctrl_name, "apply") == 0 || strcmp(ctrl_name, "confirm") == 0) {
+			fprintf(stderr, "sel: %d, real: %d\n", g_sel_fullscreen, g_fullscreen);
+			if (g_sel_fullscreen != g_fullscreen) {
+				toggle_borderless_fullscreen();
+			}
+		}
+	}
+
+	return ret;
 }
 
 static unsigned __fastcall
@@ -184,6 +240,10 @@ on_combo_change(void *ctrl)
 	const char *parent_name = *(const char **)(parent_win + 0x28);
 
 	fprintf(stderr, "combo: %s, selection: %u, win: %s\n", ctrl_name, selection, parent_name);
+
+	if (strcmp(parent_name, "Win_SettingSystem") == 0 && strcmp(ctrl_name, "Combo_Full") == 0) {
+		g_sel_fullscreen = !!selection;
+	}
 
 	return real_fn(ctrl);
 }
@@ -347,25 +407,18 @@ ThreadMain(LPVOID _unused)
 
 	fprintf(stderr, "game data at %p\n", g_pw_data);
 
-	/* always set windowed mode on startup */
-	patch_mem(0x4fae99, "\x29\xd2\x90", 3);
-	/* WinAPI window styles at startup when windowed */
-	patch_mem_u32(0x43ba7a, 0x80000000);
-
-	/* WinAPI window styles when windowed on every win resize */
-	patch_mem_u32(0x40beb5, 0x80000000);
-	/* WinAPI window styles passed to AdjustWindowRectEx on every win resize.
-	 * This is used to calculate exact window dimensions to be used when positioning the
-	 * window to the center of the screen. */
-	patch_mem_u32(0x40beac, 0x80000000);
-	/* always set windowed mode in the settings menu */
-	patch_mem(0x4faed4, "\xc6\xc1\x00", 3);
+	/* hook into config reading on start */
+	patch_mem_u32(0x40b258, (uintptr_t)read_fullscreen_opt - 0x40b257 - 5);
+	patch_mem_u32(0x40b843, (uintptr_t)save_fullscreen_opt - 0x40b842 - 5);
 
 	/* hook into ui change handler */
-	patch_mem_u32(0x55006e, (uintptr_t)on_ui_change - (uintptr_t)0x55006d - 0 - 5);
+	patch_mem_u32(0x55006e, (uintptr_t)on_ui_change - 0x55006d - 0 - 5);
 
 	/* hook into combo box selection change */
 	patch_mem_u32(0x6e099c, (uintptr_t)on_combo_change - 0x6e099b - 5);
+
+	patch_mem_u32(0x4faea3, (uintptr_t)setup_fullscreen_combo - 0x4faea2 - 5);
+	patch_mem_u32(0x4faec2, (uintptr_t)setup_fullscreen_combo - 0x4faec1 - 5);
 
 	/* wait for the game window to appear */
 	for (i = 0; i < 50; i++) {
@@ -381,6 +434,10 @@ ThreadMain(LPVOID _unused)
 	}
 
 	fprintf(stderr, "window at %x\n", (unsigned long)g_window);
+
+	if (g_sel_fullscreen) {
+		toggle_borderless_fullscreen();
+	}
 
 	/* init the input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
