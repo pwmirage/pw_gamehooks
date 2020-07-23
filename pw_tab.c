@@ -32,6 +32,7 @@
 
 #include "pw_api.h"
 
+static HMODULE g_game;
 static HWND g_window;
 static WNDPROC g_orig_event_handler;
 
@@ -58,6 +59,7 @@ find_pwi_game_data(void)
 	if (Module32First(snapshot, &module_entry)) {
 		do {
 			if (_tcsicmp(module_entry.szModule, _T("game.exe")) == 0) {
+				g_game = module_entry.hModule;
 				module_base_addr = (DWORD_PTR)module_entry.modBaseAddr;
 				break;
 			}
@@ -85,9 +87,13 @@ window_enum_cb(HWND window, LPARAM _unused)
 {
 	int length = GetWindowTextLength(window);
 	char buf[64];
+	HMODULE app;
 
 	GetWindowText(window, buf, sizeof(buf));
-	if (strcmp(buf, "Element Client") == 0) {
+	app = (HMODULE) GetWindowLong(window, GWL_HINSTANCE);
+	if (strcmp(buf, "Element Client") == 0 &&
+			app == g_game) {
+		SetWindowText(window, "PW Mirage");
 		g_window = window;
 		return FALSE;
 	}
