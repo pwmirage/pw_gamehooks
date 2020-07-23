@@ -26,6 +26,7 @@
 #include <windows.h>
 #include <tlhelp32.h>
 #include <tchar.h>
+#include <wchar.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <math.h>
@@ -36,6 +37,8 @@
 
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
+static const wchar_t *g_version = L"PW Mirage v59";
+static wchar_t *g_build = L"   Jul 23";
 
 static void
 toggle_borderless_fullscreen(void)
@@ -59,6 +62,7 @@ toggle_borderless_fullscreen(void)
 		/* WinAPI window styles when windowed on every win resize -> PW sets them on every resize */
 		patch_mem_u32(0x40beb5, 0x80000000);
 		patch_mem_u32(0x40beac, 0x80000000);
+
 		SetWindowLong(g_window, GWL_STYLE, 0x80000000);
 		SetWindowPos(g_window, HWND_TOP, 0, 0, fw, fh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
 	} else {
@@ -257,6 +261,10 @@ ThreadMain(LPVOID _unused)
 	patch_mem_u32(0x6e099c, (uintptr_t)on_combo_change - 0x6e099b - 5);
 	patch_mem_u32(0x4faea3, (uintptr_t)setup_fullscreen_combo - 0x4faea2 - 5);
 	patch_mem_u32(0x4faec2, (uintptr_t)setup_fullscreen_combo - 0x4faec1 - 5);
+	patch_mem_u32(0x563c6c, (uintptr_t)g_version);
+	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
+	/* don't show the notice on start */
+	patch_mem_u32(0x562ef8, 0x8e37bc);
 
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
