@@ -155,18 +155,6 @@ window_enum_cb(HWND window, LPARAM _unused)
 }
 
 static void
-hook_pwi_window_event_handler(LONG event_handler)
-{
-	EnumWindows(window_enum_cb, 0);
-	if (g_window == 0) {
-		MessageBox(NULL, "Failed to find the PWI game window", "Status", MB_OK);
-		return;
-	}
-
-	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, event_handler);
-}
-
-static void
 select_mob(uint32_t id)
 {
 	uint32_t _sel_mob_call_addr = g_base_addr + 0x1A8080;
@@ -233,7 +221,6 @@ select_closest_mob(void)
 	select_mob(new_target_id);
 }
 
-
 static LRESULT CALLBACK
 event_handler(HWND window, UINT event, WPARAM data, LPARAM _unused)
 {
@@ -257,14 +244,30 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM _unused)
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
-	/* let the game start */
-	Sleep(8 * 1000);
+	int i;
 
 	/* find and init some game data */
 	find_pwi_game_data();
 
+	fprintf(stderr, "game data at %p\n", g_app);
+
+	/* wait for the game window to appear */
+	for (i = 0; i < 50; i++) {
+		Sleep(150);
+		EnumWindows(window_enum_cb, 0);
+		if (g_window) {
+			break;
+		}
+	}
+	if (g_window == 0) {
+		MessageBox(NULL, "Failed to find the PWI game window", "Status", MB_OK);
+		return 1;
+	}
+
+	fprintf(stderr, "window at %x\n", (unsigned long)g_window);
+
 	/* init the input handling */
-	hook_pwi_window_event_handler((LONG)event_handler);
+	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
 
 	return 0;
 }
