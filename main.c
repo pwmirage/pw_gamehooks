@@ -37,8 +37,8 @@
 
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
-static const wchar_t *g_version = L"PW Mirage v59";
-static wchar_t *g_build = L"   Jul 23";
+static wchar_t g_version[32];
+static wchar_t g_build[32];
 
 static void
 toggle_borderless_fullscreen(void)
@@ -242,6 +242,27 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM _unused)
 	return CallWindowProc(g_orig_event_handler, window, event, data, _unused);
 }
 
+static void
+set_pw_version(void)
+{
+	FILE *fp = fopen("../patcher/version", "rb");
+	int version;
+
+	if (!fp) {
+		return;
+	}
+
+	fread(&version, sizeof(version), 1, fp);
+	fclose(fp);
+	fprintf(stderr, "PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
+
+	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"       PW Mirage");
+	snwprintf(g_build, sizeof(g_build) / sizeof(wchar_t), L"      v%d", version);
+
+	patch_mem_u32(0x563c6c, (uintptr_t)g_version);
+	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -261,8 +282,7 @@ ThreadMain(LPVOID _unused)
 	patch_mem_u32(0x6e099c, (uintptr_t)on_combo_change - 0x6e099b - 5);
 	patch_mem_u32(0x4faea3, (uintptr_t)setup_fullscreen_combo - 0x4faea2 - 5);
 	patch_mem_u32(0x4faec2, (uintptr_t)setup_fullscreen_combo - 0x4faec1 - 5);
-	patch_mem_u32(0x563c6c, (uintptr_t)g_version);
-	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
+	set_pw_version();
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
 

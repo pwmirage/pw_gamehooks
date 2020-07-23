@@ -1,5 +1,6 @@
 OBJECTS = main.o pw_api.o gamehook.o
 CFLAGS := -m32 -O3 -MD -MP $(CFLAGS)
+CFLAGS += -DHOOK_BUILD_DATE=\"$(shell date +'%b\ %e')\"
 
 $(shell mkdir -p build &>/dev/null)
 
