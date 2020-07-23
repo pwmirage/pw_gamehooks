@@ -166,6 +166,20 @@ on_ui_change(const char *ctrl_name, void *win)
 	return real_fn(ctrl_name, win);
 }
 
+static unsigned __fastcall
+on_combo_change(void *ctrl)
+{
+	unsigned __fastcall (*real_fn)(void *) = (void *)0x6e1c90;
+	const char *ctrl_name = *(const char **)(ctrl + 0x14);
+	int selection = *(int *)(ctrl + 0xa0);
+	void *parent_win = *(void **)(ctrl + 0xc);
+	const char *parent_name = *(const char **)(parent_win + 0x28);
+
+	fprintf(stderr, "combo: %s, selection: %u, win: %s\n", ctrl_name, selection, parent_name);
+
+	return real_fn(ctrl);
+}
+
 static void
 find_pwi_game_data(void)
 {
@@ -339,6 +353,9 @@ ThreadMain(LPVOID _unused)
 
 	/* hook into ui change handler */
 	patch_mem_u32(0x55006e, (uintptr_t)on_ui_change - (uintptr_t)0x55006d - 0 - 5);
+
+	/* hook into combo box selection change */
+	patch_mem_u32(0x6e099c, (uintptr_t)on_combo_change - 0x6e099b - 5);
 
 	/* wait for the game window to appear */
 	for (i = 0; i < 50; i++) {
