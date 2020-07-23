@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #include "pw_api.h"
 
@@ -85,12 +86,15 @@ patch_mem_u16(uintptr_t addr, uint16_t u16)
 	patch_mem(addr, u.c, 2);
 }
 
-static void *
-trampoline(uintptr_t addr, const char *buf, unsigned num_bytes)
+static char g_nops[64];
+
+void *
+trampoline(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned num_bytes)
 {
 	char *code;
 
-	code = VirtualAlloc(NULL, (num_bytes + 0xFFF + 0x10 + 0x5) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
+	code = VirtualAlloc(NULL, (num_bytes + 0xFFF + 0x10 + replaced_bytes) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	if (code == NULL) {
 		MessageBox(NULL, "malloc failed", "Status", MB_OK);
 		return NULL;
@@ -99,17 +103,21 @@ trampoline(uintptr_t addr, const char *buf, unsigned num_bytes)
 	VirtualProtect(code, num_bytes, PAGE_EXECUTE_READWRITE, NULL);
 
 	/* put original, replaced instructions at the end */
-	memcpy(code + num_bytes, (void *)addr, 5);
+	memcpy(code + num_bytes, (void *)addr, replaced_bytes);
 
 	/* jump to new code */
 	patch_mem(addr, "\xe9", 1);
 	patch_mem_u32(addr + 1, (uintptr_t)code - addr - 5);
+	if (replaced_bytes > 5) {
+		patch_mem(addr + 5, g_nops, replaced_bytes - 5);
+	}
 
 	memcpy(code, buf, num_bytes);
 
 	/* jump back */
-	patch_mem((uintptr_t)code + num_bytes + 5, "\xe9", 1);
-	patch_mem_u32((uintptr_t)code + num_bytes + 6, addr + 5 - ((uintptr_t)code + num_bytes + 5) - 5);
+	patch_mem((uintptr_t)code + num_bytes + replaced_bytes, "\xe9", 1);
+	patch_mem_u32((uintptr_t)code + num_bytes + replaced_bytes + 1,
+		addr + 5 - ((uintptr_t)code + num_bytes + replaced_bytes + 1) - 5);
 	return code;
 }
 
@@ -331,6 +339,8 @@ static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
 	int i;
+
+	memset(g_nops, 0x90, sizeof(g_nops));
 
 	/* find and init some game data */
 	find_pwi_game_data();

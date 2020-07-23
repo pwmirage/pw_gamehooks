@@ -99,4 +99,5 @@ extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_target
 void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
 void patch_mem_u32(uintptr_t addr, uint32_t u32);
 void patch_mem_u16(uintptr_t addr, uint16_t u16);
+void *trampoline(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned num_bytes);
 void u32_to_str(char *buf, uint32_t u32);
