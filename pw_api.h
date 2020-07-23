@@ -22,8 +22,10 @@
  * THE SOFTWARE.
  */
 
+#include <windows.h>
 #include <inttypes.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 /* we want to use pointers in our game structs for convenience,
  * so make sure this lib is compiled as 32bit, just like the original
@@ -92,9 +94,16 @@ struct app_data {
 	struct game_data *game;
 };
 
+extern HMODULE g_game;
+extern HWND g_window;
 extern struct app_data *g_pw_data;
 extern void (*pw_select_target)(int id);
 extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
+
+HWND pw_wait_for_win(void);
+HMODULE pw_find_pwi_game_data(void);
+void pw_spawn_debug_window(void);
+void pw_static_init(void);
 
 void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
 void patch_mem_u32(uintptr_t addr, uint32_t u32);
