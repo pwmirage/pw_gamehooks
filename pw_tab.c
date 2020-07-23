@@ -30,78 +30,13 @@
 #include <stdint.h>
 #include <math.h>
 
-/* we want to use pointers in our game structs for convenience,
- * so make sure this lib is compiled as 32bit, just like the original
- * PW client
- */
-
-/* real game structures
- * fields named "unk" are simply unknown and are used only
- * as a padding.
- */
-
-struct player {
-	char unk1[60];
-	float pos_x;
-	float pos_z;
-	float pos_y;
-	char unk2[1072];
-	uint32_t hp;
-	char unk3[1436];
-	uint32_t target_id;
-};
-
-struct mob {
-	char unk1[60];
-	float pos_x;
-	float pos_z;
-	float pos_y;
-	char unk2[108];
-	uint32_t type; /* 6=mob, 7=npc */
-	char unk3[100];
-	uint32_t id;
-	char unk4[12];
-	uint32_t hp;
-	char unk5[236];
-	uint32_t disappear_count; /* number of ticks after mob death */
-	uint32_t disappear_maxval; /* ticks before the mob disappears */
-	char unk6[128];
-	uint32_t state; /* walking, chasing, returning, or just-died */
-};
-
-struct mob_list {
-	char unk1[20];
-	uint32_t count;
-	char unk2[56];
-	struct mob_array {
-		struct mob *mob[0];
-	} *mobs;
-};
-
-struct world_objects {
-	char unk1[32];
-	char unk2[4]; /* player list? */
-	struct mob_list *moblist;
-};
-
-struct game_data {
-	char unk1[8];
-	struct world_objects *wobj;
-	char unk2[20];
-	struct player *player;
-	char unk3[108];
-	uint32_t logged_in; /* 2 = logged in */
-};
-
-struct app_data {
-	struct game_data *game;
-};
+#include "pw_api.h"
 
 static HWND g_window;
 static WNDPROC g_orig_event_handler;
 
 static uint32_t g_base_addr;
-static struct app_data *g_app;
+struct app_data *g_app;
 
 static void
 find_pwi_game_data(void)
