@@ -29,6 +29,7 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <math.h>
+#include <stdbool.h>
 
 #include "pw_api.h"
 
@@ -37,10 +38,95 @@ static HWND g_window;
 static WNDPROC g_orig_event_handler;
 
 static void *g_base_addr;
+static bool g_fullscreen = false;
 
 struct app_data *g_pw_data;
 void (*pw_select_target)(int id);
 void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
+
+void
+patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
+{
+	DWORD prevProt;
+	int i;
+
+	fprintf(stderr, "patching %d bytes at 0x%x: ", num_bytes, addr);
+	for (i = 0; i < num_bytes; i++) {
+		fprintf(stderr, "0x%x ", (unsigned char)buf[i]);
+	}
+	fprintf(stderr, "\n");
+
+	VirtualProtect((void *)addr, num_bytes, PAGE_EXECUTE_READWRITE, &prevProt);
+	memcpy((void *)addr, buf, num_bytes);
+	VirtualProtect((void *)addr, num_bytes, prevProt, NULL);
+}
+
+void
+patch_mem_u32(uintptr_t addr, uint32_t u32)
+{
+	union {
+		char c[4];
+		uint32_t u;
+	} u;
+
+	u.u = u32;
+	patch_mem(addr, u.c, 4);
+}
+
+void
+patch_mem_u16(uintptr_t addr, uint16_t u16)
+{
+	union {
+		char c[2];
+		uint32_t u;
+	} u;
+
+	u.u = u16;
+	patch_mem(addr, u.c, 2);
+}
+
+static void *
+trampoline(uintptr_t addr, const char *buf, unsigned num_bytes)
+{
+	char *code;
+
+	code = VirtualAlloc(NULL, (num_bytes + 0xFFF + 0x10 + 0x5) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (code == NULL) {
+		MessageBox(NULL, "malloc failed", "Status", MB_OK);
+		return NULL;
+	}
+
+	VirtualProtect(code, num_bytes, PAGE_EXECUTE_READWRITE, NULL);
+
+	/* put original, replaced instructions at the end */
+	memcpy(code + num_bytes, (void *)addr, 5);
+
+	/* jump to new code */
+	patch_mem(addr, "\xe9", 1);
+	patch_mem_u32(addr + 1, (uintptr_t)code - addr - 5);
+
+	memcpy(code, buf, num_bytes);
+
+	/* jump back */
+	patch_mem((uintptr_t)code + num_bytes + 5, "\xe9", 1);
+	patch_mem_u32((uintptr_t)code + num_bytes + 6, addr + 5 - ((uintptr_t)code + num_bytes + 5) - 5);
+	return code;
+}
+
+void
+u32_to_str(char *buf, uint32_t u32)
+{
+	union {
+		char c[4];
+		uint32_t u;
+	} u;
+
+	u.u = u32;
+	buf[0] = u.c[0];
+	buf[1] = u.c[1];
+	buf[2] = u.c[2];
+	buf[3] = u.c[3];
+}
 
 static void
 find_pwi_game_data(void)
@@ -150,12 +236,34 @@ select_closest_mob(void)
 static LRESULT CALLBACK
 event_handler(HWND window, UINT event, WPARAM data, LPARAM _unused)
 {
+	if (!g_pw_data || !g_pw_data->game || g_pw_data->game->logged_in != 2) {
+		/* let the game handle this key */
+		return CallWindowProc(g_orig_event_handler, window, event, data, _unused);
+	}
+
 	switch(event) {
 	case WM_KEYDOWN:
-		if (g_pw_data && g_pw_data->game && g_pw_data->game->logged_in == 2) {
-			if (data== VK_TAB) {
-				select_closest_mob();
-				return TRUE;
+		if (data == VK_TAB) {
+			select_closest_mob();
+			return TRUE;
+		} else if (data == VK_PAUSE) {
+			int fw, fh;
+
+			fw = GetSystemMetrics(SM_CXSCREEN);
+			fh = GetSystemMetrics(SM_CYSCREEN);
+
+			g_fullscreen = !g_fullscreen;
+			if (!g_fullscreen) {
+				/* WinAPI window styles when windowed on every win resize -> PW sets them on every resize */
+				patch_mem_u32(0x40beb5, 0x80000000);
+				patch_mem_u32(0x40beac, 0x80000000);
+				SetWindowLong(g_window, GWL_STYLE, 0x80000000);
+				SetWindowPos(g_window, HWND_TOP, 0, 0, fw, fh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+			} else if (g_fullscreen) {
+				patch_mem_u32(0x40beb5, 0x80ce0000);
+				patch_mem_u32(0x40beac, 0x80ce0000);
+				SetWindowLong(g_window, GWL_STYLE, 0x80ce0000);
+				SetWindowPos(g_window, HWND_TOP, 0, 0, fw - 100, fh - 100, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
 			}
 		}
 		break;
@@ -176,6 +284,20 @@ ThreadMain(LPVOID _unused)
 	find_pwi_game_data();
 
 	fprintf(stderr, "game data at %p\n", g_pw_data);
+
+	/* always set windowed mode on startup */
+	patch_mem(0x4fae99, "\x29\xd2\x90", 3);
+	/* WinAPI window styles at startup when windowed */
+	patch_mem_u32(0x43ba7a, 0x80000000);
+
+	/* WinAPI window styles when windowed on every win resize */
+	patch_mem_u32(0x40beb5, 0x80000000);
+	/* WinAPI window styles passed to AdjustWindowRectEx on every win resize.
+	 * This is used to calculate exact window dimensions to be used when positioning the
+	 * window to the center of the screen. */
+	patch_mem_u32(0x40beac, 0x80000000);
+	/* always set windowed mode in the settings menu */
+	patch_mem(0x4faed4, "\xc6\xc1\x00", 3);
 
 	/* wait for the game window to appear */
 	for (i = 0; i < 50; i++) {

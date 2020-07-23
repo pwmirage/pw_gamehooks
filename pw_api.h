@@ -95,3 +95,8 @@ struct app_data {
 extern struct app_data *g_pw_data;
 extern void (*pw_select_target)(int id);
 extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
+
+void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
+void patch_mem_u32(uintptr_t addr, uint32_t u32);
+void patch_mem_u16(uintptr_t addr, uint16_t u16);
+void u32_to_str(char *buf, uint32_t u32);
