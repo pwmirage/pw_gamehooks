@@ -1,8 +1,20 @@
-all: dll
+OBJECTS = main.o pw_api.o gamehook.o
+CFLAGS := -m32 -O3 -MD -MP $(CFLAGS)
 
-.PHONY: dll
+$(shell mkdir -p build &>/dev/null)
 
-dll:
-	gcc -m32 -O3 -c -o main.o main.c
-	gcc -m32 -O3 -c -o pw_api.o pw_api.c
-	gcc -m32 -o pw_tab.dll -s -shared main.c pw_api.o -Wl,--subsystem,windows
+all: build/gamehook.dll
+
+clean:
+	rm -f $(OBJECTS:%.o=build/%.o) $(OBJECTS:%.o=build/%.d)
+
+build/gamehook.dll: $(OBJECTS:%.o=build/%.o)
+	gcc $(CFLAGS) -o $@ -s -shared $^ -Wl,--subsystem,windows
+
+build/%.o: %.c
+	gcc $(CFLAGS) -c -o $@ $<
+
+build/gamehook.o: gamehook.rc
+	windres -i $< -o $@
+
+-include $(OBJECTS:%.o=build/%.d)
