@@ -38,13 +38,12 @@ static HMODULE g_game;
 static HWND g_window;
 static WNDPROC g_orig_event_handler;
 
-static void *g_base_addr;
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
 
-struct app_data *g_pw_data;
-void (*pw_select_target)(int id);
-void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
+struct app_data *g_pw_data = (void *)0x92764c;
+void (*pw_select_target)(int id) = (void *)0x5a8080;
+void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids) = (void *)0x5a8a20;
 
 void
 patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
@@ -251,7 +250,6 @@ on_combo_change(void *ctrl)
 static void
 find_pwi_game_data(void)
 {
-	DWORD_PTR module_base_addr = 0;
 	MODULEENTRY32 module_entry;
 	HANDLE snapshot;
 
@@ -266,26 +264,20 @@ find_pwi_game_data(void)
 		do {
 			if (_tcsicmp(module_entry.szModule, _T("game.exe")) == 0) {
 				g_game = module_entry.hModule;
-				module_base_addr = (DWORD_PTR)module_entry.modBaseAddr;
 				break;
 			}
 		} while (Module32Next(snapshot, &module_entry));
 	}
 	CloseHandle(snapshot);
 
-	if (module_base_addr == 0) {
+	if (g_game == 0) {
 		goto err;
 	}
-
-	g_base_addr = module_base_addr;
-	g_pw_data = (struct app_data *)(g_base_addr + 0x52764c);
-	pw_select_target = g_base_addr + 0x1a8080;
-	pw_use_skill = g_base_addr + 0x1a8a20;
 
 	return;
 
 err:
-	MessageBox(NULL, "Failed to retrieve PWI base address", "Status", MB_OK);
+	MessageBox(NULL, "Failed to find PW HMODULE", "Status", MB_OK);
 }
 
 static BOOL CALLBACK
