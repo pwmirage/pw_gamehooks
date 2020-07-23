@@ -35,8 +35,11 @@
 static HWND g_window;
 static WNDPROC g_orig_event_handler;
 
-static uint32_t g_base_addr;
-struct app_data *g_app;
+static void *g_base_addr;
+
+struct app_data *g_pw_data;
+void (*pw_select_target)(int id);
+void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
 
 static void
 find_pwi_game_data(void)
@@ -67,7 +70,10 @@ find_pwi_game_data(void)
 	}
 
 	g_base_addr = module_base_addr;
-	g_app = (struct app_data *)((DWORD)module_base_addr + 0x52764C);
+	g_pw_data = (struct app_data *)(g_base_addr + 0x52764c);
+	pw_select_target = g_base_addr + 0x1a8080;
+	pw_use_skill = g_base_addr + 0x1a8a20;
+
 	return;
 
 err:
@@ -90,30 +96,9 @@ window_enum_cb(HWND window, LPARAM _unused)
 }
 
 static void
-select_mob(uint32_t id)
-{
-	uint32_t _sel_mob_call_addr = g_base_addr + 0x1A8080;
-
-	/* we could technically just set player->target_id and
-	 * it will select proper mob in the game, but the target hp bar
-	 * will be all black as if the mob had 0 HP (that's what the game
-	 * thinks actually). To get the mob HP, we need to send a request
-	 * to the server, so here we just call the actual in-game function
-	 * that's called whenever the user selects some monster with mouse
-	 */
-	asm (
-		"push %1\n\t"
-		"call *%0"
-		:: "r" (_sel_mob_call_addr), "r" (id)
-		: "sp"
-	);
-}
-
-
-static void
 select_closest_mob(void)
 {
-	struct game_data *game = g_app->game;
+	struct game_data *game = g_pw_data->game;
 	struct player *player = game->player;
 	uint32_t mobcount = game->wobj->moblist->count;
 	float min_dist = 999;
@@ -153,7 +138,7 @@ select_closest_mob(void)
 		}
 	}
 
-	select_mob(new_target_id);
+	pw_select_target(new_target_id);
 }
 
 static LRESULT CALLBACK
@@ -161,7 +146,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM _unused)
 {
 	switch(event) {
 	case WM_KEYDOWN:
-		if (g_app && g_app->game && g_app->game->logged_in == 2) {
+		if (g_pw_data && g_pw_data->game && g_pw_data->game->logged_in == 2) {
 			if (data== VK_TAB) {
 				select_closest_mob();
 				return TRUE;
@@ -184,7 +169,7 @@ ThreadMain(LPVOID _unused)
 	/* find and init some game data */
 	find_pwi_game_data();
 
-	fprintf(stderr, "game data at %p\n", g_app);
+	fprintf(stderr, "game data at %p\n", g_pw_data);
 
 	/* wait for the game window to appear */
 	for (i = 0; i < 50; i++) {

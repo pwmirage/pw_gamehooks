@@ -92,4 +92,6 @@ struct app_data {
 	struct game_data *game;
 };
 
-extern struct app_data *g_app;
+extern struct app_data *g_pw_data;
+extern void (*pw_select_target)(int id);
+extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
