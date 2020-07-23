@@ -308,6 +308,39 @@ window_enum_cb(HWND window, LPARAM _unused)
 }
 
 static void
+spawn_debug_window(void)
+{
+	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+	int consoleHandleR, consoleHandleW ;
+	long stdioHandle;
+	FILE *fptr;
+
+	AllocConsole();
+	SetConsoleTitle("PW Debug Console");
+
+	EnableMenuItem(GetSystemMenu(GetConsoleWindow(), FALSE), SC_CLOSE , MF_GRAYED);
+	DrawMenuBar(GetConsoleWindow());
+
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &consoleInfo);
+
+	stdioHandle = (long)GetStdHandle(STD_INPUT_HANDLE);
+	consoleHandleR = _open_osfhandle(stdioHandle, 0x400);
+	fptr = _fdopen(consoleHandleR, "r");
+	*stdin = *fptr;
+	setvbuf(stdin, NULL, _IONBF, 0);
+
+	stdioHandle = (long) GetStdHandle(STD_OUTPUT_HANDLE);
+	consoleHandleW = _open_osfhandle(stdioHandle, 0x400);
+	fptr = _fdopen(consoleHandleW, "w");
+	*stdout = *fptr;
+	setvbuf(stdout, NULL, _IONBF, 0);
+
+	stdioHandle = (long)GetStdHandle(STD_ERROR_HANDLE);
+	*stderr = *fptr;
+	setvbuf(stderr, NULL, _IONBF, 0);
+}
+
+static void
 select_closest_mob(void)
 {
 	struct game_data *game = g_pw_data->game;
@@ -406,6 +439,7 @@ ThreadMain(LPVOID _unused)
 	find_pwi_game_data();
 
 	fprintf(stderr, "game data at %p\n", g_pw_data);
+	spawn_debug_window();
 
 	/* hook into config reading on start */
 	patch_mem_u32(0x40b258, (uintptr_t)read_fullscreen_opt - 0x40b257 - 5);
