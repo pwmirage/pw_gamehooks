@@ -129,6 +129,44 @@ u32_to_str(char *buf, uint32_t u32)
 }
 
 static void
+toggle_borderless_fullscreen(void) {
+	int fw, fh;
+
+	fw = GetSystemMetrics(SM_CXSCREEN);
+	fh = GetSystemMetrics(SM_CYSCREEN);
+
+	g_fullscreen = !g_fullscreen;
+	if (!g_fullscreen) {
+		/* WinAPI window styles when windowed on every win resize -> PW sets them on every resize */
+		patch_mem_u32(0x40beb5, 0x80000000);
+		patch_mem_u32(0x40beac, 0x80000000);
+		SetWindowLong(g_window, GWL_STYLE, 0x80000000);
+		SetWindowPos(g_window, HWND_TOP, 0, 0, fw, fh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+	} else if (g_fullscreen) {
+		patch_mem_u32(0x40beb5, 0x80ce0000);
+		patch_mem_u32(0x40beac, 0x80ce0000);
+		SetWindowLong(g_window, GWL_STYLE, 0x80ce0000);
+		SetWindowPos(g_window, HWND_TOP, 0, 0, fw - 100, fh - 100, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+	}
+}
+
+/* button clicks / slider changes / etc */
+static unsigned __stdcall
+on_ui_change(const char *ctrl_name, void *win)
+{
+	const char *win_name = *(const char **)(win + 0x28);
+	fprintf(stderr, "ctrl: %s, win: %s\n", ctrl_name, win_name);
+
+	if (strcmp(win_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
+		toggle_borderless_fullscreen();
+		return 1;
+	}
+
+	unsigned __stdcall (*real_fn)(const char *cmd, void *win) = (void *)0x6c9670;
+	return real_fn(ctrl_name, win);
+}
+
+static void
 find_pwi_game_data(void)
 {
 	DWORD_PTR module_base_addr = 0;
@@ -298,6 +336,9 @@ ThreadMain(LPVOID _unused)
 	patch_mem_u32(0x40beac, 0x80000000);
 	/* always set windowed mode in the settings menu */
 	patch_mem(0x4faed4, "\xc6\xc1\x00", 3);
+
+	/* hook into ui change handler */
+	patch_mem_u32(0x55006e, (uintptr_t)on_ui_change - (uintptr_t)0x55006d - 0 - 5);
 
 	/* wait for the game window to appear */
 	for (i = 0; i < 50; i++) {
