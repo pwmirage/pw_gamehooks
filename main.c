@@ -112,7 +112,7 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 	fprintf(stderr, "ctrl: %s, win: %s\n", ctrl_name, parent_name);
 
 	if (strcmp(parent_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
-		toggle_borderless_fullscreen();
+		show_settings_win(!is_settings_win_visible());
 		return 1;
 	}
 
@@ -266,6 +266,8 @@ set_pw_version(void)
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
+	MSG msg;
+
 	pw_static_init();
 	/* find and init some game data */
 
@@ -295,8 +297,14 @@ ThreadMain(LPVOID _unused)
 		toggle_borderless_fullscreen();
 	}
 
-	/* init the input handling */
+	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
+
+	/* process our custom windows input */
+	while (GetMessage(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
 
 	return 0;
 }

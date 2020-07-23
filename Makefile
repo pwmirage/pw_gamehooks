@@ -1,4 +1,4 @@
-OBJECTS = main.o pw_api.o gamehook.o
+OBJECTS = main.o pw_api.o settings.o gamehook.o
 CFLAGS := -m32 -O3 -MD -MP $(CFLAGS)
 CFLAGS += -DHOOK_BUILD_DATE=\"$(shell date +'%b\ %e')\"
 
@@ -10,7 +10,7 @@ clean:
 	rm -f $(OBJECTS:%.o=build/%.o) $(OBJECTS:%.o=build/%.d)
 
 build/gamehook.dll: $(OBJECTS:%.o=build/%.o)
-	gcc $(CFLAGS) -o $@ -s -shared $^ -Wl,--subsystem,windows
+	gcc $(CFLAGS) -o $@ -s -shared $^ -Wl,--subsystem,windows -lgdi32
 
 build/%.o: %.c
 	gcc $(CFLAGS) -c -o $@ $<
