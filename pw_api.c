@@ -112,7 +112,7 @@ trampoline(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned nu
 		return NULL;
 	}
 
-	VirtualProtect(code, num_bytes, PAGE_EXECUTE_READWRITE, NULL);
+	VirtualProtect(code, num_bytes + 0x10 + replaced_bytes, PAGE_EXECUTE_READWRITE, NULL);
 
 	/* put original, replaced instructions at the end */
 	memcpy(code + num_bytes, (void *)addr, replaced_bytes);
@@ -131,6 +131,39 @@ trampoline(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned nu
 	patch_mem_u32((uintptr_t)code + num_bytes + replaced_bytes + 1,
 		addr + 5 - ((uintptr_t)code + num_bytes + replaced_bytes + 1) - 5);
 	return code;
+}
+
+void
+trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn)
+{
+	uint32_t addr = (uintptr_t)*orig_fn;
+	char orig_code[32];
+	char buf[32];
+	char *orig;
+
+	memcpy(orig_code, (void *)addr, replaced_bytes);
+
+	orig = VirtualAlloc(NULL, (replaced_bytes + 5 + 0xFFF) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (orig == NULL) {
+		MessageBox(NULL, "malloc failed", "Status", MB_OK);
+		return;
+	}
+
+	VirtualProtect(orig, replaced_bytes + 5, PAGE_EXECUTE_READWRITE, NULL);
+
+	/* copy original code to a buffer */
+	memcpy(orig, (void *)addr, replaced_bytes);
+	/* follow it by a jump to the rest of original code */
+	orig[replaced_bytes] = 0xe9;
+	u32_to_str(orig + replaced_bytes + 1, (uint32_t)(uintptr_t)addr + replaced_bytes - (uintptr_t)orig - replaced_bytes - 5);
+
+	/* patch the original code to do a jump */
+	buf[0] = 0xe9;
+	u32_to_str(buf + 1, (uint32_t)(uintptr_t)fn - addr - 5);
+	memset(buf + 5, 0x90, replaced_bytes - 5);
+	patch_mem(addr, buf, replaced_bytes);
+
+	*orig_fn = orig;
 }
 
 void

@@ -263,6 +263,14 @@ set_pw_version(void)
 	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
 }
 
+static void
+use_skill_hooked(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids)
+{
+	fprintf(stderr, "Using skill 0x%x, pvp_mask=%u, num_tgt=%d, tgt1=%u\n", skill_id, pvp_mask, num_targets, target_ids[0]);
+
+	pw_use_skill(skill_id, pvp_mask, num_targets, target_ids);
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -287,6 +295,7 @@ ThreadMain(LPVOID _unused)
 	set_pw_version();
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
+	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
 
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
