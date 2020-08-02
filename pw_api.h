@@ -37,24 +37,39 @@
  * as a padding.
  */
 
-struct player {
-	char unk1[60];
-	float pos_x;
-	float pos_z;
-	float pos_y;
-	char unk2[1072];
-	uint32_t hp;
-	char unk3[1436];
-	uint32_t target_id;
-};
-
-struct mob {
+struct object {
 	char unk1[60];
 	float pos_x;
 	float pos_z;
 	float pos_y;
 	char unk2[108];
-	uint32_t type; /* 6=mob, 7=npc */
+	uint32_t type; /* 3=player, 6=mob, 7=npc */
+};
+
+#define ISPLAYERID(id)  ((id) && !((id) & 0x80000000))
+#define ISNPCID(id)	 (((id) & 0x80000000) && !((id) & 0x40000000))
+#define ISMATTERID(id)  (((id) & 0xC0000000) == 0xC0000000)
+
+struct skill {
+	char unk1[4];
+	void *unk2;
+	int id;
+	char unk3[12];
+	bool on_cooldown;
+};
+
+struct player {
+	struct object obj;
+	char unk2[960];
+	uint32_t hp;
+	char unk3[1436];
+	uint32_t target_id;
+	char unk4[424];
+	struct skill *cur_skill;
+};
+
+struct mob {
+	struct object obj;
 	char unk3[100];
 	uint32_t id;
 	char unk4[12];
@@ -63,7 +78,7 @@ struct mob {
 	uint32_t disappear_count; /* number of ticks after mob death */
 	uint32_t disappear_maxval; /* ticks before the mob disappears */
 	char unk6[128];
-	uint32_t state; /* walking, chasing, returning, or just-died */
+	uint32_t state; /* 4=walking, 5=attacking, 7=chasing, ?=returning, ?=just-died, 13=running away */
 };
 
 struct mob_list {
@@ -99,6 +114,24 @@ extern HWND g_window;
 extern struct app_data *g_pw_data;
 extern void (*pw_select_target)(int id);
 extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
+extern void (*pw_normal_attack)(unsigned char pvp_mask);
+
+/*
+ * alive_flag:
+ *   1 target must be alive
+ *   2 target must be dead
+ *   0 don't care
+ */
+extern struct object * __thiscall (*pw_get_object)(struct world_objects *world, int id, int alive_filter);
+/*
+ * touch_type:
+ *   1 melee
+ *   2 skill
+ *   3 talk
+ *   0 other
+ */
+extern unsigned __thiscall (*pw_can_touch_target)(struct player *player, float tgt_coords[3], float tgt_radius, int touch_type, float max_melee_dist);
+extern void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2);
 
 HWND pw_wait_for_win(void);
 HMODULE pw_find_pwi_game_data(void);

@@ -41,6 +41,10 @@ HWND g_window;
 struct app_data *g_pw_data = (void *)0x92764c;
 void (*pw_select_target)(int id) = (void *)0x5a8080;
 void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids) = (void *)0x5a8a20;
+void (*pw_normal_attack)(unsigned char pvp_mask) = (void *)0x5a80c0;
+struct object * __thiscall (*pw_get_object)(struct world_objects *world, int id, int alive_filter) = (void *)0x429510;
+unsigned __thiscall (*pw_can_touch_target)(struct player *player, float tgt_coords[3], float tgt_radius, int touch_type, float max_melee_dist) = (void *)0x458100;
+void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465140;
 
 void
 patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)

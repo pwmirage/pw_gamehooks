@@ -152,6 +152,76 @@ on_combo_change(void *ctrl)
 	return real_fn(ctrl);
 }
 
+static bool g_atk_sent;
+
+static unsigned __thiscall
+hooked_can_touch_target(struct player *player, float tgt_coords[3], float tgt_radius,
+	   int touch_type, float max_melee_dist)
+{
+	unsigned ret = pw_can_touch_target(player, tgt_coords, tgt_radius, touch_type, max_melee_dist);
+	int target_id = g_pw_data->game->player->target_id;
+	struct object *obj = pw_get_object(g_pw_data->game->wobj, target_id, 0);
+
+	if ((touch_type != 2 && touch_type != 1) || !obj || obj->type != 6) {
+		/* not a mob, don't alter anything  */
+		g_atk_sent = false;
+		return ret;
+	}
+
+	if (!ret) {
+		/* can't touch */
+		g_atk_sent = false;
+		return ret;
+	}
+
+	tgt_radius = max(0.5, tgt_radius - 1.75);
+	unsigned new_ret = pw_can_touch_target(player, tgt_coords, tgt_radius, touch_type, max_melee_dist);
+	if (!new_ret && !g_atk_sent) {
+		g_atk_sent = true;
+		/* don't wait for the attack timer to tick, attack ASAP, but dont stop running.
+		 * This will practically send a packet to the server. After we get server response
+		 * a casting animation will start (and the character will instantly stop running).
+		 * There's obviously a delay inbetween, which in the default game makes it look like
+		 * the character stopped running and is just waiting [...for the server packet to come].
+		 * Also if the monster was running away it might be already too far then, so use this
+		 * trick below to catch it early. This makes gameplay a lot smoother
+		 */
+		if (touch_type == 2) { /* skill */
+			if (player->cur_skill && !player->cur_skill->on_cooldown) {
+				fprintf(stderr, "sending skill %d\n", player->cur_skill->id);
+				pw_use_skill(player->cur_skill->id, 0, 1, &target_id);
+			}
+		} else { /* melee */
+			fprintf(stderr, "sending normal attack\n");
+			pw_normal_attack(0);
+		}
+	} else if (new_ret) {
+		g_atk_sent = false;
+	}
+
+	return new_ret;
+}
+
+static float
+dist_obj(struct object *obj1, struct object *obj2)
+{
+	float dist_tmp, dist;
+
+	dist_tmp = obj1->pos_x - obj2->pos_x;
+	dist_tmp *= dist_tmp;
+	dist = dist_tmp;
+
+	dist_tmp = obj1->pos_z - obj2->pos_z;
+	dist_tmp *= dist_tmp;
+	dist += dist_tmp;
+
+	dist_tmp = obj1->pos_y - obj2->pos_y;
+	dist_tmp *= dist_tmp;
+	dist += dist_tmp;
+
+	return sqrt(dist);
+}
+
 static void
 select_closest_mob(void)
 {
@@ -163,10 +233,10 @@ select_closest_mob(void)
 	struct mob *mob;
 
 	for (int i = 0; i < mobcount; i++) {
-		float dist, dist_tmp;
+		float dist;
 
 		mob = game->wobj->moblist->mobs->mob[i];
-		if (mob->type != 6) {
+		if (mob->obj.type != 6) {
 			/* not a monster */
 			continue;
 		}
@@ -176,19 +246,7 @@ select_closest_mob(void)
 			continue;
 		}
 
-		dist_tmp = mob->pos_x - player->pos_x;
-		dist_tmp *= dist_tmp;
-		dist = dist_tmp;
-
-		dist_tmp = mob->pos_z - player->pos_z;
-		dist_tmp *= dist_tmp;
-		dist += dist_tmp;
-
-		dist_tmp = mob->pos_y - player->pos_y;
-		dist_tmp *= dist_tmp;
-		dist += dist_tmp;
-
-		dist = sqrt(dist);
+		dist = dist_obj(&mob->obj, &player->obj);
 		if (dist < min_dist) {
 			min_dist = dist;
 			new_target_id = mob->id;
@@ -256,8 +314,8 @@ set_pw_version(void)
 	fclose(fp);
 	fprintf(stderr, "PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
 
-	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"       PW Mirage");
-	snwprintf(g_build, sizeof(g_build) / sizeof(wchar_t), L"      v%d", version);
+	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"	   PW Mirage");
+	snwprintf(g_build, sizeof(g_build) / sizeof(wchar_t), L"	  v%d", version);
 
 	patch_mem_u32(0x563c6c, (uintptr_t)g_version);
 	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
@@ -292,6 +350,7 @@ ThreadMain(LPVOID _unused)
 	patch_mem_u32(0x6e099c, (uintptr_t)on_combo_change - 0x6e099b - 5);
 	patch_mem_u32(0x4faea3, (uintptr_t)setup_fullscreen_combo - 0x4faea2 - 5);
 	patch_mem_u32(0x4faec2, (uintptr_t)setup_fullscreen_combo - 0x4faec1 - 5);
+	trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
 	set_pw_version();
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
