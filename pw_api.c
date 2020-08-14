@@ -51,14 +51,15 @@ void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465140;
 void
 patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
 {
+	char tmp[1024];
+	size_t tmplen = 0;
 	DWORD prevProt;
 	int i;
 
-	fprintf(stderr, "patching %d bytes at 0x%x: ", num_bytes, addr);
 	for (i = 0; i < num_bytes; i++) {
-		fprintf(stderr, "0x%x ", (unsigned char)buf[i]);
+		_snprintf(tmp + tmplen, max(0, sizeof(tmp) - tmplen), "0x%x ", (unsigned char)buf[i]);
 	}
-	fprintf(stderr, "\n");
+	pw_log("patching %d bytes at 0x%x: %s", num_bytes, addr, tmp);
 
 	VirtualProtect((void *)addr, num_bytes, PAGE_EXECUTE_READWRITE, &prevProt);
 	memcpy((void *)addr, buf, num_bytes);
@@ -172,52 +173,51 @@ trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn)
 	*orig_fn = orig;
 }
 
-void
-pw_spawn_debug_window(void)
+#define LOG_MAX_LEN 2048
+#define LOG_SAVED_ENTRIES_COUNT 64
+
+static unsigned g_first_log_idx = 0;
+static unsigned g_last_log_idx = 0;
+
+struct log_entry {
+	unsigned argb_color;
+	wchar_t msg[LOG_MAX_LEN];
+};
+
+static struct log_entry g_saved_log[LOG_SAVED_ENTRIES_COUNT];
+
+static unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2) = (void *)0x431f30;
+
+static void
+populate_console_log(void)
 {
-	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	int consoleHandleR, consoleHandleW ;
-	long stdioHandle;
-	FILE *fptr;
+	struct log_entry *entry;
+	unsigned i = g_first_log_idx;
 
-	AllocConsole();
-	SetConsoleTitle("PW Debug Console");
+	while ((i % LOG_SAVED_ENTRIES_COUNT) != (g_last_log_idx % LOG_SAVED_ENTRIES_COUNT)) {
+		entry = &g_saved_log[i % LOG_SAVED_ENTRIES_COUNT];
+		pw_console_log(g_pw_data->game->ui->ui_manager, entry->msg, entry->argb_color);
+		i++;
+	}
+}
 
-	EnableMenuItem(GetSystemMenu(GetConsoleWindow(), FALSE), SC_CLOSE , MF_GRAYED);
-	DrawMenuBar(GetConsoleWindow());
+static unsigned __thiscall
+hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
+{
+	unsigned ret = pw_load_configs(game, unk1, unk2);
 
-	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &consoleInfo);
-
-	stdioHandle = (long)GetStdHandle(STD_INPUT_HANDLE);
-	consoleHandleR = _open_osfhandle(stdioHandle, 0x400);
-	fptr = _fdopen(consoleHandleR, "r");
-	*stdin = *fptr;
-	setvbuf(stdin, NULL, _IONBF, 0);
-
-	stdioHandle = (long) GetStdHandle(STD_OUTPUT_HANDLE);
-	consoleHandleW = _open_osfhandle(stdioHandle, 0x400);
-	fptr = _fdopen(consoleHandleW, "w");
-	*stdout = *fptr;
-	setvbuf(stdout, NULL, _IONBF, 0);
-
-	stdioHandle = (long)GetStdHandle(STD_ERROR_HANDLE);
-	*stderr = *fptr;
-	setvbuf(stderr, NULL, _IONBF, 0);
+	populate_console_log();
+	return ret;
 }
 
 int
 pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args)
 {
 	wchar_t fmt_w[512];
-	wchar_t buf[4096 - sizeof(fmt_w)];
-	int rc;
 	wchar_t *fmt_wp;
 	wchar_t c;
-
-	if (!g_pw_data || !g_pw_data->game || !g_pw_data->game->ui ||
-			!g_pw_data->game->ui->ui_manager) {
-		return -EBUSY;
-	}
+	struct log_entry *entry;
+	int rc;
 
 	rc = snwprintf(fmt_w, sizeof(fmt_w) / sizeof(fmt_w[0]), L"%S", fmt);
 	if (rc < 0) {
@@ -229,15 +229,32 @@ pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args)
 		if (c == '%' && *fmt_wp == 's') {
 			/* %s requires a wchar_t*, a regular char* is %S */
 			*fmt_wp++ = 'S';
+		} else if (c == '\n') {
+			/* hide the newline, it would render as an empty square otherwise */
+			*(fmt_wp - 1) = ' ';
 		}
 	}
 
-	rc = vsnwprintf(buf, sizeof(buf) / sizeof(buf[0]), fmt_w, args);
+	entry = &g_saved_log[g_last_log_idx++ % LOG_SAVED_ENTRIES_COUNT];
+	if ((g_last_log_idx % LOG_SAVED_ENTRIES_COUNT) == (g_first_log_idx % LOG_SAVED_ENTRIES_COUNT)) {
+		/* we made a loop and will now override the "first" entry", so make
+		 * the second first the new first */
+		g_first_log_idx++;
+	}
+
+	entry->argb_color = argb_color;
+	rc = vsnwprintf(entry->msg, LOG_MAX_LEN, fmt_w, args);
 	if (rc < 0) {
 		return rc;
 	}
 
-	pw_console_log(g_pw_data->game->ui->ui_manager, buf, argb_color);
+	if (!g_pw_data || !g_pw_data->game || !g_pw_data->game->ui ||
+			!g_pw_data->game->ui->ui_manager) {
+		return 0;
+	}
+
+	pw_console_log(g_pw_data->game->ui->ui_manager, entry->msg, argb_color);
+	return 0;
 }
 
 int
@@ -300,6 +317,8 @@ pw_find_pwi_game_data(void)
 	}
 	CloseHandle(snapshot);
 
+	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
+
 	return g_game;
 }
 
@@ -337,7 +356,7 @@ pw_wait_for_win(void)
 		}
 	}
 
-	fprintf(stderr, "window at %x\n", (unsigned long)g_window);
+	pw_log("window at %x\n", (unsigned long)g_window);
 
     return g_window;
 }

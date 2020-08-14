@@ -90,7 +90,7 @@ read_fullscreen_opt(void *unk1, void *unk2, void *unk3, void *unk4)
 	unsigned is_fullscreen = real_fn(unk1, unk2, unk3, unk4);
 
 	g_sel_fullscreen = is_fullscreen;
-	fprintf(stderr, "fullscreen: %d\n", g_sel_fullscreen);
+	pw_log("fullscreen: %d\n", g_sel_fullscreen);
 	/* always return false */
 	return 0;
 }
@@ -109,7 +109,7 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 	unsigned __stdcall (*real_fn)(const char *, void *) = (void *)0x6c9670;
 	const char *parent_name = *(const char **)(parent_win + 0x28);
 
-	fprintf(stderr, "ctrl: %s, win: %s\n", ctrl_name, parent_name);
+	pw_log("ctrl: %s, win: %s\n", ctrl_name, parent_name);
 
 	if (strcmp(parent_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
 		show_settings_win(!is_settings_win_visible());
@@ -124,7 +124,7 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 		} else if (strcmp(ctrl_name, "IDCANCEL") == 0) {
 			g_sel_fullscreen = g_fullscreen;
 		} else if (strcmp(ctrl_name, "apply") == 0 || strcmp(ctrl_name, "confirm") == 0) {
-			fprintf(stderr, "sel: %d, real: %d\n", g_sel_fullscreen, g_fullscreen);
+			pw_log("sel: %d, real: %d\n", g_sel_fullscreen, g_fullscreen);
 			if (g_sel_fullscreen != g_fullscreen) {
 				toggle_borderless_fullscreen();
 			}
@@ -143,7 +143,7 @@ on_combo_change(void *ctrl)
 	void *parent_win = *(void **)(ctrl + 0xc);
 	const char *parent_name = *(const char **)(parent_win + 0x28);
 
-	fprintf(stderr, "combo: %s, selection: %u, win: %s\n", ctrl_name, selection, parent_name);
+	pw_log("combo: %s, selection: %u, win: %s\n", ctrl_name, selection, parent_name);
 
 	if (strcmp(parent_name, "Win_SettingSystem") == 0 && strcmp(ctrl_name, "Combo_Full") == 0) {
 		g_sel_fullscreen = !!selection;
@@ -188,11 +188,11 @@ hooked_can_touch_target(struct player *player, float tgt_coords[3], float tgt_ra
 		 */
 		if (touch_type == 2) { /* skill */
 			if (player->cur_skill && !player->cur_skill->on_cooldown) {
-				fprintf(stderr, "sending skill %d\n", player->cur_skill->id);
+				pw_log("sending skill %d\n", player->cur_skill->id);
 				pw_use_skill(player->cur_skill->id, 0, 1, &target_id);
 			}
 		} else { /* melee */
-			fprintf(stderr, "sending normal attack\n");
+			pw_log("sending normal attack\n");
 			pw_normal_attack(0);
 		}
 	} else if (new_ret) {
@@ -232,12 +232,6 @@ select_closest_mob(void)
 	uint32_t new_target_id = player->target_id;
 	struct mob *mob;
 
-	pw_log_acolor(0xFFFFFF00, "%s", "tab hook called!");
-	pw_log_acolor(0x66FFFF00, "%s", "tab hook called!");
-	pw_log_acolor(0x00FFFF00, "%s", "tab hook called!");
-	pw_log_acolor(0x11FFFF00, "%s", "tab hook called!");
-	pw_log_acolor(0xFFFFFFFF, "%s", "tab hook called!");
-	pw_log_acolor(0xFFAAFFAA, "%s", "tab hook called!");
 	for (int i = 0; i < mobcount; i++) {
 		float dist;
 
@@ -318,7 +312,7 @@ set_pw_version(void)
 
 	fread(&version, sizeof(version), 1, fp);
 	fclose(fp);
-	fprintf(stderr, "PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
+	pw_log("PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
 
 	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"	   PW Mirage");
 	snwprintf(g_build, sizeof(g_build) / sizeof(wchar_t), L"	  v%d", version);
@@ -330,7 +324,7 @@ set_pw_version(void)
 static void
 use_skill_hooked(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids)
 {
-	fprintf(stderr, "Using skill 0x%x, pvp_mask=%u, num_tgt=%d, tgt1=%u\n", skill_id, pvp_mask, num_targets, target_ids[0]);
+	pw_log("Using skill 0x%x, pvp_mask=%u, num_tgt=%d, tgt1=%u\n", skill_id, pvp_mask, num_targets, target_ids[0]);
 
 	pw_use_skill(skill_id, pvp_mask, num_targets, target_ids);
 }
@@ -348,8 +342,6 @@ ThreadMain(LPVOID _unused)
 		return 1;
 	}
 
-	pw_spawn_debug_window();
-
 	patch_mem_u32(0x40b258, (uintptr_t)read_fullscreen_opt - 0x40b257 - 5);
 	patch_mem_u32(0x40b843, (uintptr_t)save_fullscreen_opt - 0x40b842 - 5);
 	patch_mem_u32(0x55006e, (uintptr_t)on_ui_change - 0x55006d - 5);
@@ -362,28 +354,21 @@ ThreadMain(LPVOID _unused)
 	patch_mem_u32(0x562ef8, 0x8e37bc);
 	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
 
-	pw_log_color(0xFFFFFF00, "%d", __LINE__);
-
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
 		return 1;
 	}
 
-	pw_log_color(0xFFFFFF00, "%d", __LINE__);
-
 	if (g_sel_fullscreen) {
 		toggle_borderless_fullscreen();
 	}
 
-	pw_log_color(0xFFFFFF00, "%d", __LINE__);
 	/* always enable ingame console */
 	*(bool *)0x927CC8 = true;
 
-	pw_log_color(0xFFFFFF00, "%d", __LINE__);
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
 
-	pw_log_color(0xFFFFFF00, "%d", __LINE__);
 	/* process our custom windows input */
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);

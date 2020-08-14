@@ -142,7 +142,6 @@ extern void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2);
 
 HWND pw_wait_for_win(void);
 HMODULE pw_find_pwi_game_data(void);
-void pw_spawn_debug_window(void);
 void pw_static_init(void);
 
 void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
