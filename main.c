@@ -366,6 +366,9 @@ ThreadMain(LPVOID _unused)
 		toggle_borderless_fullscreen();
 	}
 
+	/* always enable ingame console */
+	*(bool *)0x927CC8 = true;
+
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
 
