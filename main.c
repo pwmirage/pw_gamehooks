@@ -232,6 +232,7 @@ select_closest_mob(void)
 	uint32_t new_target_id = player->target_id;
 	struct mob *mob;
 
+	pw_console_log(game->ui->ui_manager, L"tab hook called!", 0xFFFFFF00);
 	for (int i = 0; i < mobcount; i++) {
 		float dist;
 

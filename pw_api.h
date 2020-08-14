@@ -97,12 +97,18 @@ struct world_objects {
 };
 
 struct game_data {
-	char unk1[8];
+	char unk1[4];
+	struct ui_data *ui;
 	struct world_objects *wobj;
 	char unk2[20];
 	struct player *player;
 	char unk3[108];
 	uint32_t logged_in; /* 2 = logged in */
+};
+
+struct ui_data {
+	char unk1[8];
+	void *ui_manager;
 };
 
 struct app_data {
@@ -115,6 +121,7 @@ extern struct app_data *g_pw_data;
 extern void (*pw_select_target)(int id);
 extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
 extern void (*pw_normal_attack)(unsigned char pvp_mask);
+extern void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color);
 
 /*
  * alive_flag:
