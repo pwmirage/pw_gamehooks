@@ -22,6 +22,7 @@
  * THE SOFTWARE.
  */
 
+#include <stdbool.h>
 #include <assert.h>
 #include <windows.h>
 #include <commctrl.h>
@@ -32,6 +33,10 @@
 
 typedef void (*mg_callback)(void *arg1, void *arg2);
 
+#define UI_FREEZE_CHECKBOX 1
+#define UI_HP_BAR_CHECKBOX 2
+#define UI_MP_BAR_CHECKBOX 3
+
 struct ui_thread_ctx {
 	mg_callback cb;
 	void *arg1;
@@ -40,6 +45,9 @@ struct ui_thread_ctx {
 
 static bool g_initialized;
 static HWND g_settings_win;
+
+static bool *g_show_hp_bar = (bool *)0x00927D97;
+static bool *g_show_mp_bar = (bool *)0x00927D98;
 
 void
 ui_thread(mg_callback cb, void *arg1, void *arg2)
@@ -92,8 +100,8 @@ show_settings_win(bool show)
 
 	RegisterClass(&wc);
 	CreateWindow(wc.lpszClassName, wc.lpszClassName,
-		WS_POPUP | WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, CW_USEDEFAULT, 230, 100, g_window, 0, g_game, 0);
+		WS_POPUP | WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+		CW_USEDEFAULT, CW_USEDEFAULT, 230, 110, g_window, 0, g_game, 0);
 
 	g_initialized = true;
 }
@@ -105,13 +113,25 @@ init_gui(HWND hwnd, HINSTANCE hinst)
 
 	CreateWindow("Static", "All changes are effective immediately",
 		WS_VISIBLE | WS_CHILD | WS_GROUP | SS_LEFT,
-		10, 14, 210, 18, hwnd, (HMENU)0, hinst, 0);
+		10, 11, 210, 15, hwnd, (HMENU)0, hinst, 0);
 
 	CreateWindow("button", "Freeze window on focus lost",
 		WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-		10, 30, 210, 35,
-		hwnd, (HMENU)1, hinst, NULL);
-	CheckDlgButton(hwnd, 1, BST_CHECKED);
+		10, 30, 210, 15,
+		hwnd, (HMENU)UI_FREEZE_CHECKBOX, hinst, NULL);
+	CheckDlgButton(hwnd, UI_FREEZE_CHECKBOX, BST_CHECKED);
+
+	CreateWindow("button", "Show HP bar above player's head",
+		WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
+		10, 45, 210, 15,
+		hwnd, (HMENU)UI_HP_BAR_CHECKBOX, hinst, NULL);
+	CheckDlgButton(hwnd, UI_HP_BAR_CHECKBOX, *g_show_hp_bar ? BST_CHECKED : BST_UNCHECKED);
+
+	CreateWindow("button", "Show MP bar above player's head",
+		WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
+		10, 60, 210, 15,
+		hwnd, (HMENU)UI_MP_BAR_CHECKBOX, hinst, NULL);
+	CheckDlgButton(hwnd, UI_MP_BAR_CHECKBOX, *g_show_mp_bar ? BST_CHECKED : BST_UNCHECKED);
 
 	EnumChildWindows(hwnd, (WNDENUMPROC)hwnd_set_font,
 		(LPARAM)GetStockObject(DEFAULT_GUI_FONT));
@@ -120,7 +140,7 @@ init_gui(HWND hwnd, HINSTANCE hinst)
 static LRESULT CALLBACK
 WndProc(HWND hwnd, UINT msg, WPARAM data, LPARAM ldata)
 {
-	switch(msg) {
+	switch (msg) {
 	case WM_CREATE:
 		init_gui(hwnd, ((LPCREATESTRUCT)ldata)->hInstance);
 		SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOMOVE | SWP_NOSIZE);
@@ -128,10 +148,20 @@ WndProc(HWND hwnd, UINT msg, WPARAM data, LPARAM ldata)
 	case WM_MOUSEACTIVATE:
 		return MA_NOACTIVATE;
 	case WM_COMMAND: {
-		bool check = !IsDlgButtonChecked(hwnd, 1);
-
-		CheckDlgButton(hwnd, 1, check ? BST_CHECKED : BST_UNCHECKED);
-		patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+		int checkbox_id = LOWORD(data);
+		bool check = !IsDlgButtonChecked(hwnd, checkbox_id);
+		CheckDlgButton(hwnd, checkbox_id, check ? BST_CHECKED : BST_UNCHECKED);
+		switch (checkbox_id) {
+			case UI_FREEZE_CHECKBOX:
+				patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+				break;
+			case UI_HP_BAR_CHECKBOX:
+				*g_show_hp_bar = check;
+				break;
+			case UI_MP_BAR_CHECKBOX:
+				*g_show_mp_bar = check;
+				break;
+		}
 		break;
 	}
 	case WM_CLOSE:
