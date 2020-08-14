@@ -154,3 +154,8 @@ void u32_to_str(char *buf, uint32_t u32);
 
 bool is_settings_win_visible(void);
 void show_settings_win(bool show);
+
+int pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args);
+int pw_log_acolor(unsigned argb_color, const char *fmt, ...);
+int pw_log_color(unsigned rgb_color, const char *fmt, ...);
+int pw_log(const char *fmt, ...);

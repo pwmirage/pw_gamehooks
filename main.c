@@ -232,7 +232,12 @@ select_closest_mob(void)
 	uint32_t new_target_id = player->target_id;
 	struct mob *mob;
 
-	pw_console_log(game->ui->ui_manager, L"tab hook called!", 0xFFFFFF00);
+	pw_log_acolor(0xFFFFFF00, "%s", "tab hook called!");
+	pw_log_acolor(0x66FFFF00, "%s", "tab hook called!");
+	pw_log_acolor(0x00FFFF00, "%s", "tab hook called!");
+	pw_log_acolor(0x11FFFF00, "%s", "tab hook called!");
+	pw_log_acolor(0xFFFFFFFF, "%s", "tab hook called!");
+	pw_log_acolor(0xFFAAFFAA, "%s", "tab hook called!");
 	for (int i = 0; i < mobcount; i++) {
 		float dist;
 
@@ -357,21 +362,28 @@ ThreadMain(LPVOID _unused)
 	patch_mem_u32(0x562ef8, 0x8e37bc);
 	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
 
+	pw_log_color(0xFFFFFF00, "%d", __LINE__);
+
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
 		return 1;
 	}
 
+	pw_log_color(0xFFFFFF00, "%d", __LINE__);
+
 	if (g_sel_fullscreen) {
 		toggle_borderless_fullscreen();
 	}
 
+	pw_log_color(0xFFFFFF00, "%d", __LINE__);
 	/* always enable ingame console */
 	*(bool *)0x927CC8 = true;
 
+	pw_log_color(0xFFFFFF00, "%d", __LINE__);
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
 
+	pw_log_color(0xFFFFFF00, "%d", __LINE__);
 	/* process our custom windows input */
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);

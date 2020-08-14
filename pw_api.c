@@ -25,6 +25,7 @@
 #include "pw_api.h"
 
 #include <stdio.h>
+#include <errno.h>
 #include <windows.h>
 #include <tlhelp32.h>
 #include <tchar.h>
@@ -202,6 +203,78 @@ pw_spawn_debug_window(void)
 	stdioHandle = (long)GetStdHandle(STD_ERROR_HANDLE);
 	*stderr = *fptr;
 	setvbuf(stderr, NULL, _IONBF, 0);
+}
+
+int
+pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args)
+{
+	wchar_t fmt_w[512];
+	wchar_t buf[4096 - sizeof(fmt_w)];
+	int rc;
+	wchar_t *fmt_wp;
+	wchar_t c;
+
+	if (!g_pw_data || !g_pw_data->game || !g_pw_data->game->ui ||
+			!g_pw_data->game->ui->ui_manager) {
+		return -EBUSY;
+	}
+
+	rc = snwprintf(fmt_w, sizeof(fmt_w) / sizeof(fmt_w[0]), L"%S", fmt);
+	if (rc < 0) {
+		return rc;
+	}
+
+	fmt_wp = fmt_w;
+	while ((c = *fmt_wp++)) {
+		if (c == '%' && *fmt_wp == 's') {
+			/* %s requires a wchar_t*, a regular char* is %S */
+			*fmt_wp++ = 'S';
+		}
+	}
+
+	rc = vsnwprintf(buf, sizeof(buf) / sizeof(buf[0]), fmt_w, args);
+	if (rc < 0) {
+		return rc;
+	}
+
+	pw_console_log(g_pw_data->game->ui->ui_manager, buf, argb_color);
+}
+
+int
+pw_log_acolor(unsigned argb_color, const char *fmt, ...)
+{
+	va_list args;
+	int rc;
+
+	va_start(args, fmt);
+	rc = pw_vlog_acolor(argb_color, fmt, args);
+	va_end(args);
+	return rc;
+}
+
+int
+pw_log_color(unsigned rgb_color, const char *fmt, ...)
+{
+	unsigned argb_color = rgb_color | (0xFF << 24);
+	va_list args;
+	int rc;
+
+	va_start(args, fmt);
+	rc = pw_vlog_acolor(argb_color, fmt, args);
+	va_end(args);
+	return rc;
+}
+
+int
+pw_log(const char *fmt, ...)
+{
+	va_list args;
+	int rc;
+
+	va_start(args, fmt);
+	rc = pw_vlog_acolor(0xFFFFFFFF, fmt, args);
+	va_end(args);
+	return rc;
 }
 
 HMODULE
