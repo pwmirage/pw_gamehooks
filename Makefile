@@ -18,4 +18,8 @@ build/%.o: %.c
 build/gamehook.o: gamehook.rc
 	windres -i $< -o $@
 
+# extra daemon for rebuilding the hook remotely
+daemon: daemon.c
+	gcc $(CFLAGS) -o build/gamedaemon.exe $^ -lws2_32
+
 -include $(OBJECTS:%.o=build/%.d)
