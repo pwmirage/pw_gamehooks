@@ -39,7 +39,7 @@ build(void)
 
 	echo("$ make\n");
 	/* Open the command for reading. */
-	fp = popen("make", "r");
+	fp = popen("make 2>&1", "r");
 	if (fp == NULL) {
 		perror("");
 		exit(1);
@@ -170,7 +170,6 @@ main()
 {
 	int sockfd, len;
 	struct sockaddr_in servaddr = {}, cli = {};
-	int rc;
 
 	WORD versionWanted = MAKEWORD(1, 1);
 	WSADATA wsaData;
@@ -206,11 +205,8 @@ main()
 			return errno;
 		}
 
-		rc = handle_conn();
+		handle_conn();
 		closesocket(g_connfd);
-		if (rc != 0) {
-			break;
-		}
 	}
 
 	closesocket(sockfd);
