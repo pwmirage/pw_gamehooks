@@ -121,7 +121,10 @@ extern struct app_data *g_pw_data;
 extern void (*pw_select_target)(int id);
 extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
 extern void (*pw_normal_attack)(unsigned char pvp_mask);
+extern unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2);
 extern void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color);
+
+void pw_populate_console_log(void);
 
 /*
  * alive_flag:

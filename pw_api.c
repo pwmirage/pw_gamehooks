@@ -47,6 +47,7 @@ void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned
 struct object * __thiscall (*pw_get_object)(struct world_objects *world, int id, int alive_filter) = (void *)0x429510;
 unsigned __thiscall (*pw_can_touch_target)(struct player *player, float tgt_coords[3], float tgt_radius, int touch_type, float max_melee_dist) = (void *)0x458100;
 void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465140;
+unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2) = (void *)0x431f30;
 
 void
 patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
@@ -186,10 +187,8 @@ struct log_entry {
 
 static struct log_entry g_saved_log[LOG_SAVED_ENTRIES_COUNT];
 
-static unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2) = (void *)0x431f30;
-
-static void
-populate_console_log(void)
+void
+pw_populate_console_log(void)
 {
 	struct log_entry *entry;
 	unsigned i = g_first_log_idx;
@@ -199,15 +198,6 @@ populate_console_log(void)
 		pw_console_log(g_pw_data->game->ui->ui_manager, entry->msg, entry->argb_color);
 		i++;
 	}
-}
-
-static unsigned __thiscall
-hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
-{
-	unsigned ret = pw_load_configs(game, unk1, unk2);
-
-	populate_console_log();
-	return ret;
 }
 
 int
@@ -316,8 +306,6 @@ pw_find_pwi_game_data(void)
 		} while (Module32Next(snapshot, &module_entry));
 	}
 	CloseHandle(snapshot);
-
-	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
 
 	return g_game;
 }

@@ -329,6 +329,16 @@ use_skill_hooked(int skill_id, unsigned char pvp_mask, int num_targets, int *tar
 	pw_use_skill(skill_id, pvp_mask, num_targets, target_ids);
 }
 
+static unsigned __thiscall
+hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
+{
+	unsigned ret = pw_load_configs(game, unk1, unk2);
+
+	pw_populate_console_log();
+	return ret;
+}
+
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -349,6 +359,7 @@ ThreadMain(LPVOID _unused)
 	patch_mem_u32(0x4faea3, (uintptr_t)setup_fullscreen_combo - 0x4faea2 - 5);
 	patch_mem_u32(0x4faec2, (uintptr_t)setup_fullscreen_combo - 0x4faec1 - 5);
 	trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
+	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
 	set_pw_version();
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
