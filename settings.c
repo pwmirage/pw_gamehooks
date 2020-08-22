@@ -28,6 +28,7 @@
 #include <commctrl.h>
 
 #include "pw_api.h"
+#include "common.h"
 
 #define MG_CB_MSG (WM_USER + 165)
 

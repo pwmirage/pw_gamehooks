@@ -34,6 +34,7 @@
 #include <assert.h>
 
 #include "pw_api.h"
+#include "common.h"
 
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
@@ -344,7 +345,6 @@ ThreadMain(LPVOID _unused)
 {
 	MSG msg;
 
-	pw_static_init();
 	/* find and init some game data */
 
 	if (pw_find_pwi_game_data() == 0) {

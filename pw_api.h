@@ -124,8 +124,6 @@ extern void (*pw_normal_attack)(unsigned char pvp_mask);
 extern unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2);
 extern void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color);
 
-void pw_populate_console_log(void);
-
 /*
  * alive_flag:
  *   1 target must be alive
@@ -145,18 +143,8 @@ extern void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2);
 
 HWND pw_wait_for_win(void);
 HMODULE pw_find_pwi_game_data(void);
-void pw_static_init(void);
 
-void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
-void patch_mem_u32(uintptr_t addr, uint32_t u32);
-void patch_mem_u16(uintptr_t addr, uint16_t u16);
-void *trampoline(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned num_bytes);
-void trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn);
-void u32_to_str(char *buf, uint32_t u32);
-
-bool is_settings_win_visible(void);
-void show_settings_win(bool show);
-
+void pw_populate_console_log(void);
 int pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args);
 int pw_log_acolor(unsigned argb_color, const char *fmt, ...);
 int pw_log_color(unsigned rgb_color, const char *fmt, ...);
