@@ -11,6 +11,7 @@
 static int g_connfd;
 static DWORD g_game_procid;
 static HANDLE g_game_handle;
+static HMODULE g_game_dll;
 static char g_hookdir[1024];
 static unsigned g_hookcount;
 
@@ -132,7 +133,30 @@ detach_dll(DWORD pid, HMODULE dll)
 	}
 
 	CloseHandle(thr);
+
+	Sleep(150);
 	return 0;
+}
+
+static int
+inject(void)
+{
+	char dll_path[1024];
+	char dll_path2[1024];
+	unsigned i;
+
+	for (i = 0; i < g_hookcount; i++) {
+		_snprintf(dll_path2, sizeof(dll_path2), "%s\\build\\gamehook_%u.dll", g_hookdir, i);
+		DeleteFile(dll_path2);
+	}
+
+	_snprintf(dll_path, sizeof(dll_path), "%s\\build\\gamehook.dll", g_hookdir);
+	_snprintf(dll_path2, sizeof(dll_path2), "%s\\build\\gamehook_%u.dll", g_hookdir, g_hookcount++);
+	echo("$ game.exe %s\n", dll_path2);
+	CopyFile(dll_path, dll_path2, FALSE);
+	g_game_dll = inject_dll(g_game_procid, dll_path2);
+
+	return g_game_dll != NULL ? 0 : -1;
 }
 
 static int
@@ -140,9 +164,8 @@ start_game(void)
 {
 	STARTUPINFO pw_proc_startup_info = {0};
 	PROCESS_INFORMATION pw_proc_info = {0};
-	char dll_path[1024];
-	char dll_path2[1024];
 	BOOL result;
+	int rc;
 
 	SetCurrentDirectory(PW_GAMEDIR);
 	pw_proc_startup_info.cb = sizeof(STARTUPINFO);
@@ -162,17 +185,9 @@ start_game(void)
 	}
 
 	SetCurrentDirectory(g_hookdir);
-	_snprintf(dll_path, sizeof(dll_path), "%s/build/gamehook.dll", g_hookdir, g_hookcount);
-	_snprintf(dll_path2, sizeof(dll_path2), "%s/build/gamehook_%u.dll", g_hookdir, g_hookcount);
-	echo("$ game.exe %s\n", dll_path2);
-	CopyFile(dll_path, dll_path2, FALSE);
-	HMODULE dll = inject_dll(g_game_procid, dll_path2);
+	rc = inject();
 	ResumeThread(pw_proc_info.hThread);
-	Sleep(30 * 1000);
-	echo("detaching");
-	int rc = detach_dll(g_game_procid, dll);
-	echo("detached = %d", rc);
-	return 0;
+	return rc;
 }
 
 static int
@@ -180,6 +195,7 @@ handle_conn(void)
 {
 	char buf[1024];
 	int rc;
+	DWORD exit_code = -1;
 
 	rc = recv(g_connfd, buf, sizeof(buf), 0);
 	if (rc <= 0) {
@@ -193,7 +209,17 @@ handle_conn(void)
 	printf("cmd: %s\n", buf);
 
 	rc = build();
-	rc = rc || start_game();
+	if (rc != 0) {
+		return rc;
+	}
+
+	GetExitCodeProcess(g_game_handle, &exit_code);
+	if (exit_code != STILL_ACTIVE) {
+		rc = start_game();
+	} else {
+		rc = detach_dll(g_game_procid, g_game_dll);
+		rc = rc || inject();
+	}
 	return rc;
 }
 

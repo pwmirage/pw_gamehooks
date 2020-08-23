@@ -336,6 +336,10 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 	unsigned ret = pw_load_configs(game, unk1, unk2);
 
 	pw_populate_console_log();
+
+	/* always enable ingame console */
+	patch_mem(0x927cc8, "\x01", 1);
+
 	return ret;
 }
 
@@ -376,9 +380,6 @@ ThreadMain(LPVOID _unused)
 		toggle_borderless_fullscreen();
 	}
 
-	/* always enable ingame console */
-	patch_mem(0x927cc8, "\x01", 1);
-
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
 
@@ -398,6 +399,8 @@ ThreadMain(LPVOID _unused)
 BOOL APIENTRY
 DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 {
+	unsigned i;
+
 	switch (reason) {
 	case DLL_PROCESS_ATTACH: {
 		DisableThreadLibraryCalls(mod);
@@ -408,8 +411,11 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		PostThreadMessageA(g_tid, WM_QUIT, 0, 0);
 
 		/* wait for cleanup (not necessarily thread termination) */
-		while (!g_tid_finished) {
+		for (i = 0; i < 50; i++) {
 			Sleep(50);
+			if (g_tid_finished) {
+				break;
+			}
 		}
 
 		return TRUE;
