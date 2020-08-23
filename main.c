@@ -352,12 +352,12 @@ ThreadMain(LPVOID _unused)
 		return 1;
 	}
 
-	patch_mem_u32(0x40b258, (uintptr_t)read_fullscreen_opt - 0x40b257 - 5);
-	patch_mem_u32(0x40b843, (uintptr_t)save_fullscreen_opt - 0x40b842 - 5);
-	patch_mem_u32(0x55006e, (uintptr_t)on_ui_change - 0x55006d - 5);
-	patch_mem_u32(0x6e099c, (uintptr_t)on_combo_change - 0x6e099b - 5);
-	patch_mem_u32(0x4faea3, (uintptr_t)setup_fullscreen_combo - 0x4faea2 - 5);
-	patch_mem_u32(0x4faec2, (uintptr_t)setup_fullscreen_combo - 0x4faec1 - 5);
+	patch_jmp32(0x40b257, (uintptr_t)read_fullscreen_opt);
+	patch_jmp32(0x40b842, (uintptr_t)save_fullscreen_opt);
+	patch_jmp32(0x55006d, (uintptr_t)on_ui_change);
+	patch_jmp32(0x6e099b, (uintptr_t)on_combo_change);
+	patch_jmp32(0x4faea2, (uintptr_t)setup_fullscreen_combo);
+	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
 	trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
 	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
 	set_pw_version();

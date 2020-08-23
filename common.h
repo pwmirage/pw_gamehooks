@@ -29,6 +29,7 @@
 void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
 void patch_mem_u32(uintptr_t addr, uint32_t u32);
 void patch_mem_u16(uintptr_t addr, uint16_t u16);
+void patch_jmp32(uintptr_t addr, uintptr_t fn);
 void *trampoline(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned num_bytes);
 void trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn);
 void u32_to_str(char *buf, uint32_t u32);

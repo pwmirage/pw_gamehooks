@@ -75,6 +75,18 @@ patch_mem_u16(uintptr_t addr, uint16_t u16)
 }
 
 void
+patch_jmp32(uintptr_t addr, uintptr_t fn)
+{
+	uint8_t op = *(char *)addr;
+	if (op != 0xe9 && op != 0xe8) {
+		pw_log("Opcode %X at 0x%p is not a valid JMP/CALL", op, addr);
+		return;
+	}
+
+	patch_mem_u32(addr + 1, fn - addr - 5);
+}
+
+void
 u32_to_str(char *buf, uint32_t u32)
 {
 	union {
