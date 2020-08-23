@@ -36,6 +36,8 @@
 #include <assert.h>
 #include <io.h>
 
+#include "common.h"
+
 HMODULE g_game;
 HWND g_window;
 
@@ -167,7 +169,7 @@ pw_find_pwi_game_data(void)
 
 	snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
 	if (snapshot == INVALID_HANDLE_VALUE) {
-        return 0;
+		return 0;
 	}
 
 	module_entry.dwSize = sizeof(MODULEENTRY32);
@@ -185,41 +187,34 @@ pw_find_pwi_game_data(void)
 	return g_game;
 }
 
-static BOOL CALLBACK
-window_enum_cb(HWND window, LPARAM _unused)
+static void __stdcall
+hooked_show_window(HWND hwnd, int show)
 {
-	int length = GetWindowTextLength(window);
-	char buf[64];
-	HMODULE app;
-
-	GetWindowText(window, buf, sizeof(buf));
-	app = (HMODULE) GetWindowLong(window, GWL_HINSTANCE);
-	if (strcmp(buf, "Element Client") == 0 &&
-			app == g_game) {
-		SetWindowText(window, "PW Mirage");
-		g_window = window;
-		return FALSE;
-	}
-
-	return TRUE;
+	SetWindowText(hwnd, "PW Mirage");
+	ShowWindow(hwnd, show);
 }
 
 HWND
 pw_wait_for_win(void)
 {
-    HICON icon;
+	HWND window;
+	HICON icon;
 	int i;
 
+	patch_mem(0x43bb69, "\xe8", 1);
+	patch_jmp32(0x43bb69, (uintptr_t)hooked_show_window);
+	patch_mem(0x43bb6e, "\x90", 1);
+
 	/* wait for the game window to appear */
-	for (i = 0; i < 50; i++) {
-		Sleep(150);
-		EnumWindows(window_enum_cb, 0);
-		if (g_window) {
+	for (i = 0; i < 75; i++) {
+		Sleep(100);
+		if ((HWND)0x927f60 != NULL) {
 			break;
 		}
 	}
 
+	g_window = (HWND)0x927f60;
 	pw_log("window at %x\n", (unsigned long)g_window);
 
-    return g_window;
+	return g_window;
 }
