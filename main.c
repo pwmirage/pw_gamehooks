@@ -313,7 +313,7 @@ set_pw_version(void)
 
 	fread(&version, sizeof(version), 1, fp);
 	fclose(fp);
-	pw_log("PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
+	pw_log_color(0x11FF00, "PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
 
 	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"	   PW Mirage");
 	snwprintf(g_build, sizeof(g_build) / sizeof(wchar_t), L"	  v%d", version);
@@ -354,6 +354,7 @@ ThreadMain(LPVOID _unused)
 		return 1;
 	}
 
+	set_pw_version();
 	patch_jmp32(0x40b257, (uintptr_t)read_fullscreen_opt);
 	patch_jmp32(0x40b842, (uintptr_t)save_fullscreen_opt);
 	patch_jmp32(0x55006d, (uintptr_t)on_ui_change);
@@ -362,7 +363,6 @@ ThreadMain(LPVOID _unused)
 	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
 	trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
 	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
-	set_pw_version();
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
 	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
@@ -377,7 +377,7 @@ ThreadMain(LPVOID _unused)
 	}
 
 	/* always enable ingame console */
-	*(bool *)0x927CC8 = true;
+	patch_mem(0x927cc8, "\x01", 1);
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
@@ -388,7 +388,8 @@ ThreadMain(LPVOID _unused)
 		DispatchMessage(&msg);
 	}
 
-	pw_log("detaching");
+	pw_log_color(0xDD1100, "PW Hook unloading");
+	restore_mem();
 	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
 	g_tid_finished = true;
 	return 0;
@@ -411,7 +412,6 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 			Sleep(50);
 		}
 
-		pw_log("detached");
 		return TRUE;
 	default:
 		return FALSE;

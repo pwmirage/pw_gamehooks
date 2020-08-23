@@ -33,6 +33,7 @@ void patch_jmp32(uintptr_t addr, uintptr_t fn);
 void *trampoline(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned num_bytes);
 void trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn);
 void u32_to_str(char *buf, uint32_t u32);
+void restore_mem(void);
 
 bool is_settings_win_visible(void);
 void show_settings_win(bool show);

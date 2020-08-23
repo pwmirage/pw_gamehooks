@@ -32,6 +32,65 @@
 
 #include "pw_api.h"
 
+struct mem_region_4kb {
+	char data[4096];
+	/* which bytes were overwritten */
+	bool byte_mask[4096];
+};
+
+struct mem_region_1mb {
+	struct mem_region_4kb *pages[256];
+};
+
+struct mem_region_1mb *g_mem_map[4096];
+
+static void
+backup_page_mem(uintptr_t addr, unsigned len)
+{
+	uintptr_t addr_4k = addr / 4096;
+	uintptr_t addr_1mb = addr_4k / 256;
+	uintptr_t offset_4k = addr_4k % 256;
+	struct mem_region_1mb *reg_1m = g_mem_map[addr_1mb];
+	struct mem_region_4kb *reg_4k;
+	unsigned i;
+
+	fprintf(stderr, "backing up page 0x%p at 0x%p, 1mb=%x, 4k=%x\n", addr_4k, addr_4k * 4096, addr_1mb, offset_4k);
+	if (!reg_1m) {
+		reg_1m = g_mem_map[addr_1mb] = calloc(1, sizeof(*reg_1m));
+		if (!reg_1m) {
+			pw_log("calloc() failed in %s", __func__);
+			return;
+		}
+	}
+
+	reg_4k = reg_1m->pages[offset_4k];
+	if (!reg_4k) {
+		reg_4k = reg_1m->pages[offset_4k] = calloc(1, sizeof(*reg_4k));
+		if (!reg_4k) {
+			pw_log("calloc() failed in %s", __func__);
+			return;
+		}
+
+		memcpy(reg_4k->data, (void *)(addr_4k * 4096), 4096);
+	}
+
+	for (i = 0; i < len && i < 4096; i++) {
+		reg_4k->byte_mask[addr % 4096 + i] = 1;
+	}
+}
+
+static void
+backup_mem(uintptr_t addr, unsigned num_bytes)
+{
+	unsigned u;
+
+	for (u = 0; u < (num_bytes + 4095) / 4096; u++) {
+		unsigned page_bytes = min(num_bytes, 4096 - (addr % 4096));
+		backup_page_mem(addr, page_bytes);
+		addr += page_bytes;
+	}
+}
+
 void
 patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
 {
@@ -45,6 +104,7 @@ patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
 	}
 	pw_log("patching %d bytes at 0x%x: %s", num_bytes, addr, tmp);
 
+	backup_mem(addr, num_bytes);
 	VirtualProtect((void *)addr, num_bytes, PAGE_EXECUTE_READWRITE, &prevProt);
 	memcpy((void *)addr, buf, num_bytes);
 	VirtualProtect((void *)addr, num_bytes, prevProt, NULL);
@@ -167,6 +227,39 @@ trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn)
 	patch_mem(addr, buf, replaced_bytes);
 
 	*orig_fn = orig;
+}
+
+void
+restore_mem(void)
+{
+	struct mem_region_4kb *reg_4k;
+	struct mem_region_1mb *reg_1m;
+	unsigned i, j, b;
+	DWORD prevProt;
+	void *addr;
+
+	for (i = 0; i < 4096; i++) {
+		reg_1m = g_mem_map[i];
+		if (!reg_1m) {
+			continue;
+		}
+
+		for (j = 0; j < 256; j++) {
+			reg_4k = reg_1m->pages[j];
+			if (!reg_4k) {
+				continue;
+			}
+
+			addr = (void *)(uintptr_t)(i * 1024 * 1024 + j * 4096);
+			VirtualProtect(addr, 4096, PAGE_EXECUTE_READWRITE, &prevProt);
+			for (b = 0; b < 4096; b++) {
+				if (reg_4k->byte_mask[b]) {
+					*(char *)(addr + b) = *(char *)(reg_4k->data + b);
+				}
+			}
+			VirtualProtect(addr, 4096, prevProt, NULL);
+		}
+	}
 }
 
 static void __attribute__((constructor))
