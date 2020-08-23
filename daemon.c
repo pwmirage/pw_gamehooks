@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <winbase.h>
 #include <winsock2.h>
+#include <errno.h>
 
 static int g_connfd;
 static DWORD g_game_procid;
@@ -108,6 +109,33 @@ err:
 }
 
 static int
+detach_dll(DWORD pid, HMODULE dll)
+{
+	HANDLE thr;
+	char buf[64];
+	LPVOID free_lib_winapi_addr;
+	HMODULE injected_dll = NULL;
+	DWORD thr_state;
+	int rc;
+
+	free_lib_winapi_addr = (LPVOID)GetProcAddress(
+	GetModuleHandleA("kernel32.dll"), "FreeLibrary");
+	if (free_lib_winapi_addr == NULL) {
+		return -ENOSYS;
+	}
+
+	thr = CreateRemoteThread(g_game_handle, NULL, 0,
+			(LPTHREAD_START_ROUTINE)free_lib_winapi_addr,
+			(LPVOID)dll, 0, NULL);
+	if (thr == NULL) {
+		return -EIO;
+	}
+
+	CloseHandle(thr);
+	return 0;
+}
+
+static int
 start_game(void)
 {
 	STARTUPINFO pw_proc_startup_info = {0};
@@ -138,8 +166,12 @@ start_game(void)
 	_snprintf(dll_path2, sizeof(dll_path2), "%s/build/gamehook_%u.dll", g_hookdir, g_hookcount);
 	echo("$ game.exe %s\n", dll_path2);
 	CopyFile(dll_path, dll_path2, FALSE);
-	inject_dll(g_game_procid, dll_path2);
+	HMODULE dll = inject_dll(g_game_procid, dll_path2);
 	ResumeThread(pw_proc_info.hThread);
+	Sleep(30 * 1000);
+	echo("detaching");
+	int rc = detach_dll(g_game_procid, dll);
+	echo("detached = %d", rc);
 	return 0;
 }
 

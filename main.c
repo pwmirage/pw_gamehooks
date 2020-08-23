@@ -339,6 +339,8 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 	return ret;
 }
 
+static DWORD g_tid;
+static bool g_tid_finished = false;
 
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
@@ -386,6 +388,9 @@ ThreadMain(LPVOID _unused)
 		DispatchMessage(&msg);
 	}
 
+	pw_log("detaching");
+	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
+	g_tid_finished = true;
 	return 0;
 }
 
@@ -394,13 +399,19 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 {
 	switch (reason) {
 	case DLL_PROCESS_ATTACH: {
-		DWORD tid;
-
 		DisableThreadLibraryCalls(mod);
-		CreateThread(NULL, 0, ThreadMain, NULL, 0, &tid);
+		CreateThread(NULL, 0, ThreadMain, NULL, 0, &g_tid);
 		return TRUE;
 	}
 	case DLL_PROCESS_DETACH:
+		PostThreadMessageA(g_tid, WM_QUIT, 0, 0);
+
+		/* wait for cleanup (not necessarily thread termination) */
+		while (!g_tid_finished) {
+			Sleep(50);
+		}
+
+		pw_log("detached");
 		return TRUE;
 	default:
 		return FALSE;
