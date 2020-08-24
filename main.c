@@ -345,6 +345,13 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 
 static DWORD g_tid;
 static bool g_tid_finished = false;
+static bool g_exiting = false;
+
+static void
+hooked_exit(void)
+{
+	g_exiting = true;
+}
 
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
@@ -367,6 +374,9 @@ ThreadMain(LPVOID _unused)
 	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
 	trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
 	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
+	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
+	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
+
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
 	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
@@ -387,6 +397,12 @@ ThreadMain(LPVOID _unused)
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
+	}
+
+	if (g_exiting) {
+		/* no need to cleanup anything */
+		g_tid_finished = true;
+		return 0;
 	}
 
 	pw_log_color(0xDD1100, "PW Hook unloading");
@@ -411,11 +427,8 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		PostThreadMessageA(g_tid, WM_QUIT, 0, 0);
 
 		/* wait for cleanup (not necessarily thread termination) */
-		for (i = 0; i < 50; i++) {
+		while (!g_exiting && !g_tid_finished) {
 			Sleep(50);
-			if (g_tid_finished) {
-				break;
-			}
 		}
 
 		return TRUE;
