@@ -330,6 +330,24 @@ use_skill_hooked(int skill_id, unsigned char pvp_mask, int num_targets, int *tar
 	pw_use_skill(skill_id, pvp_mask, num_targets, target_ids);
 }
 
+static void
+hooked_on_move(float *cur_pos, float *cur_pos_unused,
+		int time, float speed, int move_mode, short timestamp)
+{
+	pw_log("sending move pkt, speed=%.5f, time=%u, cur_pos=[%.5f,%.5f], dest_pos=[%.5f,%.5f], stamp=%u",
+		speed, time, cur_pos[0], cur_pos[2], cur_pos_unused[0], cur_pos_unused[2], timestamp);
+	pw_move(cur_pos, cur_pos_unused, time, speed, move_mode, timestamp);
+}
+
+static void
+hooked_on_stop_move(float *dest_pos, float speed, int move_mode,
+		unsigned dir, short timestamp, int time)
+{
+	pw_log("sending stop_move pkt, speed=%.5f, time=%u, dest_pos=[%.5f,%.5f], stamp=%u",
+		speed, time, dest_pos[0], dest_pos[2], timestamp);
+	pw_stop_move(dest_pos, speed, move_mode, dir, timestamp, time);
+}
+
 static unsigned __thiscall
 hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 {
@@ -337,10 +355,28 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 
 	pw_populate_console_log();
 
-	/* always enable ingame console */
+	/* always enable ingame console (could have been disabled by the game at its init) */
 	patch_mem(0x927cc8, "\x01", 1);
 
 	return ret;
+}
+
+static void __thiscall (*on_player_set_pos)(void *player, float *pos) = (void *)0x46b530;
+
+static float prev_pos[3];
+
+static void __thiscall
+hooked_on_player_set_pos(void *player, float *pos)
+{
+	pw_log("%p = [%.8f,%.8f,%.8f]", player, pos[0], pos[1], pos[2]);
+	if (abs(pos[0] - prev_pos[0]) > 5.0f || abs(pos[2] - prev_pos[2]) > 5.0f) {
+		pw_log("hiccup!");
+	}
+
+	on_player_set_pos(player, pos);
+	prev_pos[0] = pos[0];
+	prev_pos[1] = pos[1];
+	prev_pos[2] = pos[2];
 }
 
 static DWORD g_tid;
@@ -372,8 +408,14 @@ ThreadMain(LPVOID _unused)
 	patch_jmp32(0x6e099b, (uintptr_t)on_combo_change);
 	patch_jmp32(0x4faea2, (uintptr_t)setup_fullscreen_combo);
 	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
+
 	trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
 	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
+	trampoline_fn((void **)&on_player_set_pos, 5, hooked_on_player_set_pos);
+
+	patch_jmp32(0x44a756, (uintptr_t)hooked_on_move);
+	patch_jmp32(0x44a58a, (uintptr_t)hooked_on_stop_move);
+	patch_jmp32(0x44a881, (uintptr_t)hooked_on_stop_move);
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
 
@@ -389,6 +431,9 @@ ThreadMain(LPVOID _unused)
 	if (g_sel_fullscreen) {
 		toggle_borderless_fullscreen();
 	}
+
+	/* always enable ingame console */
+	patch_mem(0x927cc8, "\x01", 1);
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);

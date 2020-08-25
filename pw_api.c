@@ -43,6 +43,8 @@ HWND g_window;
 
 struct app_data *g_pw_data = (void *)0x92764c;
 void (*pw_select_target)(int id) = (void *)0x5a8080;
+void (*pw_move)(float *cur_pos, float *cur_pos_unused, int time, float speed, int move_mode, short timestamp) = (void *)0x5a7f70;
+void (*pw_stop_move)(float *dest_pos, float speed, int move_mode, unsigned dir, short timestamp, int time) = (void *)0x5a8000;
 void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids) = (void *)0x5a8a20;
 void (*pw_normal_attack)(unsigned char pvp_mask) = (void *)0x5a80c0;
 void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color) = (void *)0x553cc0;

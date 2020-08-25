@@ -118,6 +118,8 @@ struct app_data {
 extern HMODULE g_game;
 extern HWND g_window;
 extern struct app_data *g_pw_data;
+extern void (*pw_move)(float *cur_pos, float *cur_pos_unused, int time, float speed, int move_mode, short timestamp);
+extern void (*pw_stop_move)(float *dest_pos, float speed, int move_mode, unsigned dir, short timestamp, int time);
 extern void (*pw_select_target)(int id);
 extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
 extern void (*pw_normal_attack)(unsigned char pvp_mask);
