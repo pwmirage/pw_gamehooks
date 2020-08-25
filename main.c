@@ -382,6 +382,7 @@ hooked_on_player_set_pos(void *player, float *pos)
 static DWORD g_tid;
 static bool g_tid_finished = false;
 static bool g_exiting = false;
+static float g_local_max_move_speed = 25.0f;
 
 static void
 hooked_exit(void)
@@ -418,6 +419,11 @@ ThreadMain(LPVOID _unused)
 	patch_jmp32(0x44a881, (uintptr_t)hooked_on_stop_move);
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
+
+	/* "teleport" other players only when they're moving >= 25m/s (instead of default >= 10m/s) */
+	patch_mem_u32(0x442bee, (uint32_t)&g_local_max_move_speed);
+	patch_mem_u32(0x442ff2, (uint32_t)&g_local_max_move_speed);
+	patch_mem_u32(0x443417, (uint32_t)&g_local_max_move_speed);
 
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
