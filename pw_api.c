@@ -210,13 +210,13 @@ pw_wait_for_win(void)
 	/* wait for the game window to appear */
 	for (i = 0; i < 75; i++) {
 		Sleep(100);
-		if ((HWND)0x927f60 != NULL) {
+		if (*(HWND*)0x927f60 != NULL) {
 			break;
 		}
 	}
 
-	g_window = (HWND)0x927f60;
-	pw_log("window at %x\n", (unsigned long)g_window);
+	g_window = *(HWND *)0x927f60;
+	pw_log("window at %x\n", (unsigned)g_window);
 
 	return g_window;
 }

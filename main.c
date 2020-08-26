@@ -458,7 +458,6 @@ ThreadMain(LPVOID _unused)
 
 	pw_log_color(0xDD1100, "PW Hook unloading");
 	restore_mem();
-	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
 	g_tid_finished = true;
 	return 0;
 }
@@ -476,6 +475,7 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 	}
 	case DLL_PROCESS_DETACH:
 		PostThreadMessageA(g_tid, WM_QUIT, 0, 0);
+		SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
 
 		/* wait for cleanup (not necessarily thread termination) */
 		while (!g_exiting && !g_tid_finished) {
