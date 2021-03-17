@@ -429,6 +429,20 @@ ThreadMain(LPVOID _unused)
 	patch_mem_u32(0x562ef8, 0x8e37bc);
 	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
 
+	/* send movement packets more often, 500ms -> 100ms */
+	patch_mem(0x44a459, "\x64\x00", 2);
+	/* wait less before sending the first movement packet 500ms -> 100ms */
+	patch_mem(0x44a6c9, "\x64\x00", 2);
+
+	/* put smaller bottom limit on other player's move time (otherwise the game processes our
+	 * frequent movement packets as if they were sent with bigger interval, which practically
+	 * slows down the player a lot */
+	patch_mem(0x442cb9, "\x31\x00", 2);
+	patch_mem(0x442cc0, "\x31\x00", 2);
+	/* increase the upper limit on other player's move time from 1s to 2s, helps on lag spikes */
+	patch_mem(0x442cc8, "\xd0\x07", 2);
+	patch_mem(0x442ccf, "\xd0\x07", 2);
+
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
 		return 1;
