@@ -379,6 +379,28 @@ hooked_on_player_set_pos(void *player, float *pos)
 	prev_pos[2] = pos[2];
 }
 
+static void __cdecl
+on_host_player_move(float *cur_pos, int dest_type, float *dest_pos,
+		const float *move_dir, float speed, int move_mode)
+{
+	void *cechostmove;
+
+	__asm__ (
+		"mov %0, ecx;"
+		: "=r"(cechostmove)
+		:
+	);
+
+	if (false && *(char *)(cechostmove + 0x2c) != 0) {
+		/* just started moving */
+		uint16_t *move_counter = (uint16_t *)(cechostmove + 100);
+
+		pw_log("first move");
+		pw_move(cur_pos, cur_pos, *(uint32_t *)(cechostmove + 0x14), speed, move_mode, *move_counter);
+		(*move_counter)++;
+	}
+}
+
 static DWORD g_tid;
 static bool g_tid_finished = false;
 static bool g_exiting = false;
@@ -442,6 +464,8 @@ ThreadMain(LPVOID _unused)
 	/* increase the upper limit on other player's move time from 1s to 2s, helps on lag spikes */
 	patch_mem(0x442cc8, "\xd0\x07", 2);
 	patch_mem(0x442ccf, "\xd0\x07", 2);
+
+	trampoline_call(0x44a650, 7, on_host_player_move);
 
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
