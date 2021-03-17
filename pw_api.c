@@ -52,6 +52,7 @@ struct object * __thiscall (*pw_get_object)(struct world_objects *world, int id,
 unsigned __thiscall (*pw_can_touch_target)(struct player *player, float tgt_coords[3], float tgt_radius, int touch_type, float max_melee_dist) = (void *)0x458100;
 void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465140;
 unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2) = (void *)0x431f30;
+unsigned char (*glb_CompressDirH)(float dirX, float dirZ) = (void *)0x4179a0;
 
 #define LOG_MAX_LEN 2048
 #define LOG_SAVED_ENTRIES_COUNT 64

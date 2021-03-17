@@ -125,6 +125,7 @@ extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_target
 extern void (*pw_normal_attack)(unsigned char pvp_mask);
 extern unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2);
 extern void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color);
+extern unsigned char (*glb_CompressDirH)(float dirX, float dirZ);
 
 /*
  * alive_flag:

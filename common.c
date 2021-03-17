@@ -163,37 +163,73 @@ u32_to_str(char *buf, uint32_t u32)
 
 static char g_nops[64];
 
-void *
-trampoline(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned num_bytes)
+void
+trampoline_call(uintptr_t addr, unsigned replaced_bytes, void *fn)
 {
+	char buf[32];
 	char *code;
 
 	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
-	code = VirtualAlloc(NULL, (num_bytes + 0xFFF + 0x10 + replaced_bytes) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	code = VirtualAlloc(NULL, (14 + replaced_bytes + 0xFFF) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (code == NULL) {
+		MessageBox(NULL, "malloc failed", "Status", MB_OK);
+		return;
+	}
+
+	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READWRITE, NULL);
+
+	/* prepare the code to jump to */
+	code[0] = 0x60; /* pushad */
+	code[1] = 0x9c; /* pushfd */
+	code[2] = 0xe8; /* call */
+	u32_to_str(code + 3, (uintptr_t)fn - (uintptr_t)code - 2 - 5); /* fn rel addr */
+	code[7] = 0x9d; /* popfd */
+	code[8] = 0x61; /* popad */
+	memcpy(code + 9, (void *)addr, replaced_bytes); /* replaced instructions */
+	code[9 + replaced_bytes] = 0xe9; /* jmp */
+	u32_to_str(code + 10 + replaced_bytes, /* jump back rel addr */
+			addr + replaced_bytes - ((uintptr_t)code + 9 + replaced_bytes) - 5);
+
+	/* jump to new code */
+	buf[0] = 0xe9;
+	u32_to_str(buf + 1, (uintptr_t)code - addr - 5);
+	memset(buf + 5, 0x90, replaced_bytes - 5);
+	patch_mem(addr, buf, replaced_bytes);
+}
+
+void *
+trampoline_buf(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned num_bytes)
+{
+	char tmpbuf[32];
+	char *code;
+
+	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
+	code = VirtualAlloc(NULL, (9 + num_bytes + replaced_bytes + 0xFFF) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	if (code == NULL) {
 		MessageBox(NULL, "malloc failed", "Status", MB_OK);
 		return NULL;
 	}
 
-	VirtualProtect(code, num_bytes + 0x10 + replaced_bytes, PAGE_EXECUTE_READWRITE, NULL);
+	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READWRITE, NULL);
 
-	/* put original, replaced instructions at the end */
-	memcpy(code + num_bytes, (void *)addr, replaced_bytes);
+	/* prepare the code to jump to */
+	code[0] = 0x60; /* pushad */
+	code[1] = 0x9c; /* pushfd */
+	memcpy(code + 2, buf, num_bytes);
+	code[2 + num_bytes] = 0x9d; /* popfd */
+	code[3 + num_bytes] = 0x61; /* popad */
+	memcpy(code + 4 + num_bytes, (void *)addr, replaced_bytes); /* replaced instructions */
+	code[4 + num_bytes + replaced_bytes] = 0xe9; /* jmp */
+	u32_to_str(code + 5 + num_bytes + replaced_bytes, /* jump back rel addr */
+			addr + replaced_bytes - ((uintptr_t)code + 4 + num_bytes + replaced_bytes) - 5);
 
 	/* jump to new code */
-	patch_mem(addr, "\xe9", 1);
-	patch_mem_u32(addr + 1, (uintptr_t)code - addr - 5);
-	if (replaced_bytes > 5) {
-		patch_mem(addr + 5, g_nops, replaced_bytes - 5);
-	}
+	tmpbuf[0] = 0xe9;
+	u32_to_str(tmpbuf + 1, (uintptr_t)code - addr - 5);
+	memset(tmpbuf + 5, 0x90, replaced_bytes - 5);
+	patch_mem(addr, tmpbuf, replaced_bytes);
 
-	memcpy(code, buf, num_bytes);
-
-	/* jump back */
-	patch_mem((uintptr_t)code + num_bytes + replaced_bytes, "\xe9", 1);
-	patch_mem_u32((uintptr_t)code + num_bytes + replaced_bytes + 1,
-		addr + 5 - ((uintptr_t)code + num_bytes + replaced_bytes + 1) - 5);
-	return code;
+	return code + 2;
 }
 
 void
