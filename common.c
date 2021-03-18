@@ -100,7 +100,7 @@ patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
 	int i;
 
 	for (i = 0; i < num_bytes; i++) {
-		_snprintf(tmp + tmplen, max(0, sizeof(tmp) - tmplen), "0x%x ", (unsigned char)buf[i]);
+		tmplen += _snprintf(tmp + tmplen, max(0, sizeof(tmp) - tmplen), "0x%x ", (unsigned char)buf[i]);
 	}
 	pw_log("patching %d bytes at 0x%x: %s", num_bytes, addr, tmp);
 
