@@ -335,16 +335,20 @@ ThreadMain(LPVOID _unused)
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
 
-	/* send movement packets more often, 500ms -> 100ms */
-	patch_mem(0x44a459, "\x64\x00", 2);
-	/* wait less before sending the first movement packet 500ms -> 100ms */
-	patch_mem(0x44a6c9, "\x64\x00", 2);
+	/* send movement packets more often, 500ms -> 80ms */
+	patch_mem(0x44a459, "\x50\x00", 2);
+	/* wait less before sending the first movement packet 200ms -> 144ms */
+	patch_mem(0x44a6c9, "\x90\x00", 2);
 
 	/* put smaller bottom limit on other player's move time (otherwise the game processes our
 	 * frequent movement packets as if they were sent with bigger interval, which practically
 	 * slows down the player a lot */
-	patch_mem(0x442cb9, "\x68\x00", 2);
-	patch_mem(0x442cc0, "\x68\x00", 2);
+	patch_mem(0x442cb9, "\x50\x00", 2);
+	patch_mem(0x442cc0, "\x50\x00", 2);
+	/* hardcoded movement speed, originally lower than min. packet interval */
+	patch_mem(0x442dec, "\x40", 1);
+	patch_mem(0x443008, "\x40", 1);
+	patch_mem(0x443180, "\x40", 1);
 	/* increase the upper limit on other player's move time from 1s to 2s, helps on lag spikes */
 	patch_mem(0x442cc8, "\xd0\x07", 2);
 	patch_mem(0x442ccf, "\xd0\x07", 2);
