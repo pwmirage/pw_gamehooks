@@ -72,7 +72,7 @@ set_borderless_fullscreen(bool is_fullscreen)
 		patch_mem_u32(0x40beb5, 0x80ce0000);
 		patch_mem_u32(0x40beac, 0x80ce0000);
 		SetWindowLong(g_window, GWL_STYLE, 0x80ce0000);
-		SetWindowPos(g_window, HWND_TOP, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+		SetWindowPos(g_window, HWND_TOP, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOSIZE);
 	}
 }
 
@@ -348,6 +348,9 @@ ThreadMain(LPVOID _unused)
 	/* increase the upper limit on other player's move time from 1s to 2s, helps on lag spikes */
 	patch_mem(0x442cc8, "\xd0\x07", 2);
 	patch_mem(0x442ccf, "\xd0\x07", 2);
+
+	/* force screenshots via direct3d, not angellica engine */
+	patch_mem(0x433e35, "\xeb", 1);
 
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
