@@ -349,9 +349,19 @@ hooked_on_stop_move(float *dest_pos, float speed, int move_mode,
 	pw_stop_move(dest_pos, speed, move_mode, dir, timestamp, time);
 }
 
+static wchar_t g_win_title[128];
+
+DWORD __stdcall
+hooked_pw_load_configs_cb(void *arg)
+{
+	SetWindowTextW(g_window, g_win_title);
+}
+
 static unsigned __thiscall
 hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 {
+	DWORD tid;
+
 	unsigned ret = pw_load_configs(game, unk1, unk2);
 
 	pw_populate_console_log();
@@ -359,6 +369,10 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 	/* always enable ingame console (could have been disabled by the game at its init) */
 	patch_mem(0x927cc8, "\x01", 1);
 
+	wchar_t *player_name = *(wchar_t **)(((char *)game->player) + 0x5cc);
+	snwprintf(g_win_title, sizeof(g_win_title) / sizeof(g_win_title[0]), L"PW Mirage: %s", player_name);
+	/* the process hangs if we update the title from this thread... */
+	CreateThread(NULL, 0, hooked_pw_load_configs_cb, NULL, 0, &tid);
 	return ret;
 }
 
