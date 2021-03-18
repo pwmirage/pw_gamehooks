@@ -406,6 +406,7 @@ ThreadMain(LPVOID _unused)
 	}
 
 	set_pw_version();
+
 	patch_jmp32(0x40b257, (uintptr_t)read_fullscreen_opt);
 	patch_jmp32(0x40b842, (uintptr_t)save_fullscreen_opt);
 	patch_jmp32(0x55006d, (uintptr_t)on_ui_change);
@@ -413,13 +414,19 @@ ThreadMain(LPVOID _unused)
 	patch_jmp32(0x4faea2, (uintptr_t)setup_fullscreen_combo);
 	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
 
-	trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
-	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
-	trampoline_fn((void **)&on_player_set_pos, 5, hooked_on_player_set_pos);
+	/* don't run creportbugs on crash */
+	patch_mem(0x8cfb40, "_", 1);
+	/* don't run pwprotector */
+	patch_mem(0x8cfb30, "_", 1);
 
-	patch_jmp32(0x44a756, (uintptr_t)hooked_on_move);
-	patch_jmp32(0x44a58a, (uintptr_t)hooked_on_stop_move);
-	patch_jmp32(0x44a881, (uintptr_t)hooked_on_stop_move);
+	//trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
+	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
+	//trampoline_fn((void **)&on_player_set_pos, 5, hooked_on_player_set_pos);
+
+	//patch_jmp32(0x44a756, (uintptr_t)hooked_on_move);
+	//patch_jmp32(0x44a58a, (uintptr_t)hooked_on_stop_move);
+	//patch_jmp32(0x44a881, (uintptr_t)hooked_on_stop_move);
+
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
 
@@ -430,7 +437,7 @@ ThreadMain(LPVOID _unused)
 
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
-	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
+	//trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
 
 	/* send movement packets more often, 500ms -> 100ms */
 	patch_mem(0x44a459, "\x64\x00", 2);
@@ -440,8 +447,8 @@ ThreadMain(LPVOID _unused)
 	/* put smaller bottom limit on other player's move time (otherwise the game processes our
 	 * frequent movement packets as if they were sent with bigger interval, which practically
 	 * slows down the player a lot */
-	patch_mem(0x442cb9, "\x31\x00", 2);
-	patch_mem(0x442cc0, "\x31\x00", 2);
+	patch_mem(0x442cb9, "\x68\x00", 2);
+	patch_mem(0x442cc0, "\x68\x00", 2);
 	/* increase the upper limit on other player's move time from 1s to 2s, helps on lag spikes */
 	patch_mem(0x442cc8, "\xd0\x07", 2);
 	patch_mem(0x442ccf, "\xd0\x07", 2);
