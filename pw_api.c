@@ -99,6 +99,9 @@ pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args)
 		if (c == '%' && *fmt_wp == 's') {
 			/* %s requires a wchar_t*, a regular char* is %S */
 			*fmt_wp++ = 'S';
+		} else if (c == '%' && *fmt_wp == 'S') {
+			/* make %S the wchar_t */
+			*fmt_wp++ = 's';
 		} else if (c == '\n') {
 			/* hide the newline, it would render as an empty square otherwise */
 			*(fmt_wp - 1) = ' ';
