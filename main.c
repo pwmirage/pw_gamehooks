@@ -311,6 +311,7 @@ set_pw_version(void)
 		return;
 	}
 
+	fseek(fp, 4, SEEK_SET);
 	fread(&version, sizeof(version), 1, fp);
 	fclose(fp);
 	pw_log_color(0x11FF00, "PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
