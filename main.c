@@ -42,28 +42,30 @@ static wchar_t g_version[32];
 static wchar_t g_build[32];
 
 static void
-toggle_borderless_fullscreen(void)
+set_borderless_fullscreen(bool is_fullscreen)
 {
 	static int x, y, w, h;
+	RECT rect;
 
-	g_fullscreen = !g_fullscreen;
-	if (g_fullscreen) {
-		int fw, fh;
-		RECT rect;
-
-		fw = GetSystemMetrics(SM_CXSCREEN);
-		fh = GetSystemMetrics(SM_CYSCREEN);
-
+	if (w == 0 || is_fullscreen) {
+		/* save window position & dimensions */
 		GetWindowRect(g_window, &rect);
 		x = rect.left;
 		y = rect.top;
 		w = rect.right - rect.left;
 		h = rect.bottom - rect.top;
+	}
+
+	g_fullscreen = is_fullscreen;
+	if (is_fullscreen) {
+		int fw, fh;
+
+		fw = GetSystemMetrics(SM_CXSCREEN);
+		fh = GetSystemMetrics(SM_CYSCREEN);
 
 		/* WinAPI window styles when windowed on every win resize -> PW sets them on every resize */
 		patch_mem_u32(0x40beb5, 0x80000000);
 		patch_mem_u32(0x40beac, 0x80000000);
-
 		SetWindowLong(g_window, GWL_STYLE, 0x80000000);
 		SetWindowPos(g_window, HWND_TOP, 0, 0, fw, fh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
 	} else {
@@ -127,7 +129,7 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 		} else if (strcmp(ctrl_name, "apply") == 0 || strcmp(ctrl_name, "confirm") == 0) {
 			pw_log("sel: %d, real: %d\n", g_sel_fullscreen, g_fullscreen);
 			if (g_sel_fullscreen != g_fullscreen) {
-				toggle_borderless_fullscreen();
+				set_borderless_fullscreen(g_sel_fullscreen);
 			}
 		}
 	}
@@ -151,56 +153,6 @@ on_combo_change(void *ctrl)
 	}
 
 	return real_fn(ctrl);
-}
-
-static bool g_atk_sent;
-
-static unsigned __thiscall
-hooked_can_touch_target(struct player *player, float tgt_coords[3], float tgt_radius,
-	   int touch_type, float max_melee_dist)
-{
-	unsigned ret = pw_can_touch_target(player, tgt_coords, tgt_radius, touch_type, max_melee_dist);
-	int target_id = g_pw_data->game->player->target_id;
-	struct object *obj = pw_get_object(g_pw_data->game->wobj, target_id, 0);
-
-	if ((touch_type != 2 && touch_type != 1) || !obj || obj->type != 6) {
-		/* not a mob, don't alter anything  */
-		g_atk_sent = false;
-		return ret;
-	}
-
-	if (!ret) {
-		/* can't touch */
-		g_atk_sent = false;
-		return ret;
-	}
-
-	tgt_radius = max(0.5, tgt_radius - 1.75);
-	unsigned new_ret = pw_can_touch_target(player, tgt_coords, tgt_radius, touch_type, max_melee_dist);
-	if (!new_ret && !g_atk_sent) {
-		g_atk_sent = true;
-		/* don't wait for the attack timer to tick, attack ASAP, but dont stop running.
-		 * This will practically send a packet to the server. After we get server response
-		 * a casting animation will start (and the character will instantly stop running).
-		 * There's obviously a delay inbetween, which in the default game makes it look like
-		 * the character stopped running and is just waiting [...for the server packet to come].
-		 * Also if the monster was running away it might be already too far then, so use this
-		 * trick below to catch it early. This makes gameplay a lot smoother
-		 */
-		if (touch_type == 2) { /* skill */
-			if (player->cur_skill && !player->cur_skill->on_cooldown) {
-				pw_log("sending skill %d\n", player->cur_skill->id);
-				pw_use_skill(player->cur_skill->id, 0, 1, &target_id);
-			}
-		} else { /* melee */
-			pw_log("sending normal attack\n");
-			pw_normal_attack(0);
-		}
-	} else if (new_ret) {
-		g_atk_sent = false;
-	}
-
-	return new_ret;
 }
 
 static float
@@ -272,25 +224,6 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM _unused)
 		if (data == VK_TAB) {
 			select_closest_mob();
 			return TRUE;
-		} else if (data == VK_PAUSE) {
-			int fw, fh;
-
-			fw = GetSystemMetrics(SM_CXSCREEN);
-			fh = GetSystemMetrics(SM_CYSCREEN);
-
-			g_fullscreen = !g_fullscreen;
-			if (!g_fullscreen) {
-				/* WinAPI window styles when windowed on every win resize -> PW sets them on every resize */
-				patch_mem_u32(0x40beb5, 0x80000000);
-				patch_mem_u32(0x40beac, 0x80000000);
-				SetWindowLong(g_window, GWL_STYLE, 0x80000000);
-				SetWindowPos(g_window, HWND_TOP, 0, 0, fw, fh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
-			} else if (g_fullscreen) {
-				patch_mem_u32(0x40beb5, 0x80ce0000);
-				patch_mem_u32(0x40beac, 0x80ce0000);
-				SetWindowLong(g_window, GWL_STYLE, 0x80ce0000);
-				SetWindowPos(g_window, HWND_TOP, 0, 0, fw - 100, fh - 100, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
-			}
 		}
 		break;
 	default:
@@ -323,32 +256,6 @@ set_pw_version(void)
 	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
 }
 
-static void
-use_skill_hooked(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids)
-{
-	pw_log("Using skill 0x%x, pvp_mask=%u, num_tgt=%d, tgt1=%u\n", skill_id, pvp_mask, num_targets, target_ids[0]);
-
-	pw_use_skill(skill_id, pvp_mask, num_targets, target_ids);
-}
-
-static void
-hooked_on_move(float *cur_pos, float *cur_pos_unused,
-		int time, float speed, int move_mode, short timestamp)
-{
-	pw_log("sending move pkt, speed=%.5f, time=%u, cur_pos=[%.5f,%.5f], dest_pos=[%.5f,%.5f], stamp=%u",
-		speed, time, cur_pos[0], cur_pos[2], cur_pos_unused[0], cur_pos_unused[2], timestamp);
-	pw_move(cur_pos, cur_pos_unused, time, speed, move_mode, timestamp);
-}
-
-static void
-hooked_on_stop_move(float *dest_pos, float speed, int move_mode,
-		unsigned dir, short timestamp, int time)
-{
-	pw_log("sending stop_move pkt, speed=%.5f, time=%u, dest_pos=[%.5f,%.5f], stamp=%u",
-		speed, time, dest_pos[0], dest_pos[2], timestamp);
-	pw_stop_move(dest_pos, speed, move_mode, dir, timestamp, time);
-}
-
 static wchar_t g_win_title[128];
 
 DWORD __stdcall
@@ -374,24 +281,6 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 	/* the process hangs if we update the title from this thread... */
 	CreateThread(NULL, 0, hooked_pw_load_configs_cb, NULL, 0, &tid);
 	return ret;
-}
-
-static void __thiscall (*on_player_set_pos)(void *player, float *pos) = (void *)0x46b530;
-
-static float prev_pos[3];
-
-static void __thiscall
-hooked_on_player_set_pos(void *player, float *pos)
-{
-	pw_log("%p = [%.8f,%.8f,%.8f]", player, pos[0], pos[1], pos[2]);
-	if (abs(pos[0] - prev_pos[0]) > 5.0f || abs(pos[2] - prev_pos[2]) > 5.0f) {
-		pw_log("hiccup!");
-	}
-
-	on_player_set_pos(player, pos);
-	prev_pos[0] = pos[0];
-	prev_pos[1] = pos[1];
-	prev_pos[2] = pos[2];
 }
 
 static DWORD g_tid;
@@ -433,13 +322,7 @@ ThreadMain(LPVOID _unused)
 	/* don't run pwprotector */
 	patch_mem(0x8cfb30, "_", 1);
 
-	//trampoline_fn((void **)&pw_can_touch_target, 6, hooked_can_touch_target);
 	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
-	//trampoline_fn((void **)&on_player_set_pos, 5, hooked_on_player_set_pos);
-
-	//patch_jmp32(0x44a756, (uintptr_t)hooked_on_move);
-	//patch_jmp32(0x44a58a, (uintptr_t)hooked_on_stop_move);
-	//patch_jmp32(0x44a881, (uintptr_t)hooked_on_stop_move);
 
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
@@ -451,7 +334,6 @@ ThreadMain(LPVOID _unused)
 
 	/* don't show the notice on start */
 	patch_mem_u32(0x562ef8, 0x8e37bc);
-	//trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
 
 	/* send movement packets more often, 500ms -> 100ms */
 	patch_mem(0x44a459, "\x64\x00", 2);
@@ -473,7 +355,7 @@ ThreadMain(LPVOID _unused)
 	}
 
 	if (g_sel_fullscreen) {
-		toggle_borderless_fullscreen();
+		set_borderless_fullscreen(g_sel_fullscreen);
 	}
 
 	/* always enable ingame console */
