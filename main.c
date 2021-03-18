@@ -389,6 +389,8 @@ static void
 hooked_exit(void)
 {
 	g_exiting = true;
+	/* our hacks sometimes crash on exit, not sure why. they're hacks, so just ignore the errors */
+	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 }
 
 static DWORD WINAPI
