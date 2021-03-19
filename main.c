@@ -212,11 +212,11 @@ select_closest_mob(void)
 static WNDPROC g_orig_event_handler;
 
 static LRESULT CALLBACK
-event_handler(HWND window, UINT event, WPARAM data, LPARAM _unused)
+event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
 	if (!g_pw_data || !g_pw_data->game || g_pw_data->game->logged_in != 2) {
 		/* let the game handle this key */
-		return CallWindowProc(g_orig_event_handler, window, event, data, _unused);
+		return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 	}
 
 	switch(event) {
@@ -226,12 +226,18 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM _unused)
 			return TRUE;
 		}
 		break;
+	case WM_MOVE: {
+		short x = LOWORD(lparam);
+		short y = HIWORD(lparam);
+		settings_win_move(x, y);
+		break;
+	}
 	default:
 		break;
 	}
 
 	/* let the game handle this key */
-	return CallWindowProc(g_orig_event_handler, window, event, data, _unused);
+	return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 }
 
 static void
@@ -254,6 +260,30 @@ set_pw_version(void)
 
 	patch_mem_u32(0x563c6c, (uintptr_t)g_version);
 	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
+}
+
+DWORD __stdcall
+on_add_chat_message_cb(void *arg)
+{
+	int rc = MessageBox(g_window, "New version is available. Would you like to update now?", "Mirage Update", MB_YESNO);
+}
+
+static void __thiscall
+(*on_add_chat_message_org_fn)(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion) = (void *)0x552ea0;
+
+static void __thiscall
+on_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion)
+{
+	if (channel == 12) {
+		pw_log("received (%d): %S", channel, str);
+		if (wcscmp(str, L"update") == 0) {
+			DWORD tid;
+			CreateThread(NULL, 0, on_add_chat_message_cb, NULL, 0, &tid);
+		}
+		return;
+	}
+
+	on_add_chat_message_org_fn(cecgamerun, str, channel, idPlayer, szName, byFlag, emotion);
 }
 
 static wchar_t g_win_title[128];
@@ -285,15 +315,22 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 
 static DWORD g_tid;
 static bool g_tid_finished = false;
-static bool g_exiting = false;
+bool g_exiting = false;
+bool g_unloading = false;
 static float g_local_max_move_speed = 25.0f;
 
 static void
 hooked_exit(void)
 {
+	g_unloading = true;
 	g_exiting = true;
+
 	/* our hacks sometimes crash on exit, not sure why. they're hacks, so just ignore the errors */
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+
+	show_settings_win(false);
+
+	PostQuitMessage(0);
 }
 
 static DWORD WINAPI
@@ -309,6 +346,8 @@ ThreadMain(LPVOID _unused)
 	}
 
 	set_pw_version();
+
+	patch_mem(0x40bf43, "\x81\xc4\x0c\x00\x00\x00", 6);
 
 	patch_jmp32(0x40b257, (uintptr_t)read_fullscreen_opt);
 	patch_jmp32(0x40b842, (uintptr_t)save_fullscreen_opt);
@@ -356,6 +395,8 @@ ThreadMain(LPVOID _unused)
 	/* force screenshots via direct3d, not angellica engine */
 	patch_mem(0x433e35, "\xeb", 1);
 
+	trampoline_fn((void **)&on_add_chat_message_org_fn, 7, on_add_chat_message);
+
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
 		return 1;
@@ -384,6 +425,10 @@ ThreadMain(LPVOID _unused)
 	}
 
 	pw_log_color(0xDD1100, "PW Hook unloading");
+
+	g_unloading = true;
+	show_settings_win(false);
+
 	restore_mem();
 	g_tid_finished = true;
 	return 0;
@@ -405,7 +450,7 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
 
 		/* wait for cleanup (not necessarily thread termination) */
-		while (!g_exiting && !g_tid_finished) {
+		while (!g_unloading && !g_tid_finished) {
 			Sleep(50);
 		}
 

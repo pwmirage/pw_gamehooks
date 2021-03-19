@@ -32,34 +32,26 @@
 
 #define MG_CB_MSG (WM_USER + 165)
 
-typedef void (*mg_callback)(void *arg1, void *arg2);
+typedef void (*mg_callback)(void *arg);
 
 #define UI_FREEZE_CHECKBOX 1
 #define UI_HP_BAR_CHECKBOX 2
 #define UI_MP_BAR_CHECKBOX 3
 
-struct ui_thread_ctx {
-	mg_callback cb;
-	void *arg1;
-	void *arg2;
-};
-
-static bool g_initialized;
-static HWND g_settings_win;
+static struct {
+	HWND hwnd;
+	int off_x;
+	int off_y;
+	bool pos_changing;
+} g_settings;
 
 static bool *g_show_hp_bar = (bool *)0x00927D97;
 static bool *g_show_mp_bar = (bool *)0x00927D98;
 
 void
-ui_thread(mg_callback cb, void *arg1, void *arg2)
+ui_thread(mg_callback cb, void *arg)
 {
-	struct ui_thread_ctx *ctx = malloc(sizeof(*ctx));
-	assert(ctx != NULL);
-
-	ctx->cb = cb;
-	ctx->arg1 = arg1;
-	ctx->arg2 = arg2;
-	SendMessage(g_settings_win, MG_CB_MSG, 0, (LPARAM)ctx);
+	SendMessage(g_settings.hwnd, MG_CB_MSG, (WPARAM)cb, (LPARAM)arg);
 }
 
 static BOOL CALLBACK
@@ -74,43 +66,67 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM data, LPARAM ldata);
 bool
 is_settings_win_visible(void)
 {
-	if (!g_initialized || !g_settings_win) {
+	if (!g_settings.hwnd) {
 		return false;
 	}
 
-	IsWindowVisible(g_settings_win);
+	IsWindowVisible(g_settings.hwnd);
 }
 
 void
-show_settings_win(bool show)
+settings_win_move(int x, int y)
+{
+	if (!g_settings.hwnd) {
+		return;
+	}
+
+	//pw_log("win_move(), x:%d, y:%d, off_x:%d, off_y:%d", x, y, g_settings.off_x, g_settings.off_y);
+	//x += g_settings_off_x;
+	//y += g_settings_off_y;
+
+	g_settings.pos_changing = true;
+	SetWindowPos(g_settings.hwnd, g_window, x, y, 0, 0, SWP_NOSIZE | SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+	g_settings.pos_changing = false;
+}
+
+void
+settings_win_create(void)
 {
 	WNDCLASS wc = {0};
 
-	if (g_initialized) {
-		if (g_settings_win) {
-			ShowWindow(g_settings_win, show ? SW_SHOW : SW_HIDE);
-		}
-		return;
-	}
+	assert(!g_settings.hwnd);
 
 	wc.lpszClassName = "Custom Settings";
 	wc.hInstance = g_game;
 	wc.hbrBackground = GetSysColorBrush(COLOR_3DFACE);
 	wc.lpfnWndProc = WndProc;
 	wc.hCursor = LoadCursor(0, IDC_ARROW);
-
 	RegisterClass(&wc);
-	CreateWindow(wc.lpszClassName, wc.lpszClassName,
-		WS_POPUP | WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-		CW_USEDEFAULT, CW_USEDEFAULT, 230, 110, g_window, 0, g_game, 0);
 
-	g_initialized = true;
+	RECT rect;
+	GetWindowRect(g_window, &rect);
+	g_settings.hwnd = CreateWindowEx(WS_EX_LAYERED, wc.lpszClassName, wc.lpszClassName,
+		WS_POPUP | WS_OVERLAPPED,
+		rect.left, rect.top, 230, 110, g_window, 0, g_game, 0);
+}
+
+
+void
+show_settings_win(bool show)
+{
+	WNDCLASS wc = {0};
+
+	if (!g_settings.hwnd) {
+		settings_win_create();
+	}
+
+	ShowWindow(g_settings.hwnd, show ? SW_SHOW : SW_HIDE);
 }
 
 static void
 init_gui(HWND hwnd, HINSTANCE hinst)
 {
-	g_settings_win = hwnd;
+	g_settings.hwnd = hwnd;
 
 	CreateWindow("Static", "All changes are effective immediately",
 		WS_VISIBLE | WS_CHILD | WS_GROUP | SS_LEFT,
@@ -144,10 +160,8 @@ WndProc(HWND hwnd, UINT msg, WPARAM data, LPARAM ldata)
 	switch (msg) {
 	case WM_CREATE:
 		init_gui(hwnd, ((LPCREATESTRUCT)ldata)->hInstance);
-		SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOMOVE | SWP_NOSIZE);
+		SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), 200, LWA_COLORKEY | LWA_ALPHA);
 		break;
-	case WM_MOUSEACTIVATE:
-		return MA_NOACTIVATE;
 	case WM_COMMAND: {
 		int checkbox_id = LOWORD(data);
 		bool check = !IsDlgButtonChecked(hwnd, checkbox_id);
@@ -166,10 +180,20 @@ WndProc(HWND hwnd, UINT msg, WPARAM data, LPARAM ldata)
 		break;
 	}
 	case WM_CLOSE:
-		ShowWindow(g_settings_win, SW_HIDE);
-		return 0;
+		if (!g_unloading) {
+			ShowWindow(g_settings.hwnd, SW_HIDE);
+			return 0;
+		}
+		break;
+	case MG_CB_MSG: {
+		mg_callback cb = (void *)data;
+		void *ctx = (void *)ldata;
+
+		cb(ctx);
+		break;
+	}
 	case WM_DESTROY:
-		PostQuitMessage(0);
+		g_settings.hwnd = NULL;
 		break;
 	}
 
