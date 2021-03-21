@@ -85,7 +85,7 @@ settings_win_move(int x, int y)
 	//y += g_settings_off_y;
 
 	g_settings.pos_changing = true;
-	SetWindowPos(g_settings.hwnd, g_window, x, y, 0, 0, SWP_NOSIZE | SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+	//SetWindowPos(g_settings.hwnd, g_window, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
 	g_settings.pos_changing = false;
 }
 
@@ -106,7 +106,7 @@ settings_win_create(void)
 	RECT rect;
 	GetWindowRect(g_window, &rect);
 	g_settings.hwnd = CreateWindowEx(WS_EX_LAYERED, wc.lpszClassName, wc.lpszClassName,
-		WS_POPUP | WS_OVERLAPPED,
+		WS_POPUP | WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
 		rect.left, rect.top, 230, 110, g_window, 0, g_game, 0);
 }
 
@@ -161,6 +161,7 @@ WndProc(HWND hwnd, UINT msg, WPARAM data, LPARAM ldata)
 	case WM_CREATE:
 		init_gui(hwnd, ((LPCREATESTRUCT)ldata)->hInstance);
 		SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), 200, LWA_COLORKEY | LWA_ALPHA);
+		SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 		break;
 	case WM_COMMAND: {
 		int checkbox_id = LOWORD(data);
