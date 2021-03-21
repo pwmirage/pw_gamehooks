@@ -35,6 +35,7 @@
 
 #include "pw_api.h"
 #include "common.h"
+#include "d3d.h"
 
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
@@ -411,6 +412,8 @@ ThreadMain(LPVOID _unused)
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
+
+	d3d_hook(g_window);
 
 	/* process our custom windows input */
 	while (GetMessage(&msg, NULL, 0, 0)) {
