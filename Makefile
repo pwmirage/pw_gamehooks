@@ -1,4 +1,4 @@
-OBJECTS = main.o pw_api.o settings.o gamehook.o common.o d3d.o
+OBJECTS = main.o pw_api.o gamehook.o common.o d3d.o
 CFLAGS := -m32 -O3 -MD -MP -masm=intel $(CFLAGS)
 CFLAGS += -DHOOK_BUILD_DATE=\"$(shell date +'%b\ %d')\"
 

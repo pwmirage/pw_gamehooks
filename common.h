@@ -38,8 +38,3 @@ void *trampoline_buf(uintptr_t addr, unsigned replaced_bytes, const char *buf, u
 void trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn);
 void u32_to_str(char *buf, uint32_t u32);
 void restore_mem(void);
-
-void settings_win_create(void);
-bool is_settings_win_visible(void);
-void show_settings_win(bool show);
-void settings_win_move(int x, int y);

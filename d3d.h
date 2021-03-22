@@ -25,6 +25,13 @@
 #ifndef PW_D3D
 #define PW_D3D
 
+extern struct win_settings {
+	bool show;
+	bool freeze_win;
+	bool show_hp_bars;
+	bool show_mp_bars;
+} g_settings;
+
 int d3d_hook(HWND hwnd);
 LRESULT d3d_handle_input(UINT event, WPARAM data, LPARAM lparam);
 

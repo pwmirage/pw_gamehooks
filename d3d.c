@@ -39,6 +39,8 @@ static HRESULT (__stdcall *Reset_org)(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARA
 static LPDIRECT3DDEVICE9 g_device = NULL;
 static HWND g_window = NULL;
 
+struct win_settings g_settings;
+
 static HRESULT APIENTRY
 hooked_endScene(LPDIRECT3DDEVICE9 device)
 {
@@ -51,11 +53,29 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 
 		ImGuiIO *io = igGetIO();
 		ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/fzxh1jw.ttf", 15, NULL, NULL);
+
+		igGetStyle()->DisplayWindowPadding = (ImVec2){ 50, 50 };
 	}
 
 	ImGui_ImplDX9_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	igNewFrame();
+
+	if (g_settings.show) {
+		igSetNextWindowSize((ImVec2){270, 135}, ImGuiCond_FirstUseEver);
+		igBegin("Extra Settings", &g_settings.show, ImGuiWindowFlags_NoCollapse);
+		igText("All changes are applied immediately");
+		if (igCheckbox("Freeze window on focus lost", &g_settings.freeze_win)) {
+			patch_mem(0x42ba47, g_settings.freeze_win ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+		}
+		if (igCheckbox("Show HP bars above entities", &g_settings.show_hp_bars)) {
+			*(bool *)0x927d97 = !!g_settings.show_hp_bars;
+		}
+		if (igCheckbox("Show MP bars above entities", &g_settings.show_mp_bars)) {
+			*(bool *)0x927d98 = !!g_settings.show_mp_bars;
+		}
+		igEnd();
+	}
 
 	igShowDemoWindow(NULL);
 

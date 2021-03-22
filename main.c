@@ -116,7 +116,7 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 	pw_log("ctrl: %s, win: %s\n", ctrl_name, parent_name);
 
 	if (strcmp(parent_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
-		show_settings_win(!is_settings_win_visible());
+		g_settings.show = !g_settings.show;
 		return 1;
 	}
 
@@ -231,12 +231,6 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 			return TRUE;
 		}
 		break;
-	case WM_MOVE: {
-		short x = LOWORD(lparam);
-		short y = HIWORD(lparam);
-		settings_win_move(x, y);
-		break;
-	}
 	default:
 		break;
 	}
@@ -332,8 +326,6 @@ hooked_exit(void)
 
 	/* our hacks sometimes crash on exit, not sure why. they're hacks, so just ignore the errors */
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-
-	show_settings_win(false);
 
 	PostQuitMessage(0);
 }
@@ -434,7 +426,6 @@ ThreadMain(LPVOID _unused)
 	pw_log_color(0xDD1100, "PW Hook unloading");
 
 	g_unloading = true;
-	show_settings_win(false);
 
 	restore_mem();
 	g_tid_finished = true;
