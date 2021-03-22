@@ -265,7 +265,18 @@ set_pw_version(void)
 DWORD __stdcall
 on_add_chat_message_cb(void *arg)
 {
-	int rc = MessageBox(g_window, "New version is available. Would you like to update now?", "Mirage Update", MB_YESNO);
+	int rc = MessageBox(g_window, "New PW Mirage client update is available.\nWould you like to download it now?", "Mirage Update", MB_YESNO);
+
+	if (rc != IDYES) {
+		return 0;
+	}
+
+	SetCurrentDirectory("..");
+	ShellExecute(NULL, NULL, "pwmirage.exe", "--quickupdate", NULL, SW_SHOW);
+	/* ExitProcess doesn't work, so... */
+	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+	*(uint32_t *)0x0 = 42;
+	return 0;
 }
 
 static void __thiscall
