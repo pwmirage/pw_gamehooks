@@ -128,15 +128,17 @@ struct app_data {
 
 extern HMODULE g_game;
 extern HWND g_window;
-extern struct app_data *g_pw_data;
-extern void (*pw_move)(float *cur_pos, float *cur_pos_unused, int time, float speed, int move_mode, short timestamp);
-extern void (*pw_stop_move)(float *dest_pos, float speed, int move_mode, unsigned dir, short timestamp, int time);
-extern void (*pw_select_target)(int id);
-extern void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids);
-extern void (*pw_normal_attack)(unsigned char pvp_mask);
-extern unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2);
-extern void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color);
-extern unsigned char (*glb_CompressDirH)(float dirX, float dirZ);
+
+static struct app_data *g_pw_data = (void *)0x92764c;
+static void (*pw_select_target)(int id) = (void *)0x5a8080;
+static void (*pw_move)(float *cur_pos, float *cur_pos_unused, int time, float speed, int move_mode, short timestamp) = (void *)0x5a7f70;
+static void (*pw_stop_move)(float *dest_pos, float speed, int move_mode, unsigned dir, short timestamp, int time) = (void *)0x5a8000;
+static void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids) = (void *)0x5a8a20;
+static void (*pw_normal_attack)(unsigned char pvp_mask) = (void *)0x5a80c0;
+static void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color) = (void *)0x553cc0;
+static unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2) = (void *)0x431f30;
+static unsigned char (*pw_xz_dir_to_byte)(float dirX, float dirZ) = (void *)0x4179a0;
+
 
 /*
  * alive_flag:
@@ -144,7 +146,7 @@ extern unsigned char (*glb_CompressDirH)(float dirX, float dirZ);
  *   2 target must be dead
  *   0 don't care
  */
-extern struct object * __thiscall (*pw_get_object)(struct world_objects *world, int id, int alive_filter);
+static struct object * __thiscall (*pw_get_object)(struct world_objects *world, int id, int alive_filter) = (void *)0x429510;
 /*
  * touch_type:
  *   1 melee
@@ -152,17 +154,12 @@ extern struct object * __thiscall (*pw_get_object)(struct world_objects *world, 
  *   3 talk
  *   0 other
  */
-extern unsigned __thiscall (*pw_can_touch_target)(struct player *player, float tgt_coords[3], float tgt_radius, int touch_type, float max_melee_dist);
-extern void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2);
+static unsigned __thiscall (*pw_can_touch_target)(struct player *player, float tgt_coords[3], float tgt_radius, int touch_type, float max_melee_dist) = (void *)0x458100;
+static void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465140;
 
-static struct ui_dialog * __thiscall
-(*pw_get_dialog)(void *ui_manager, const char *name) = (void *)0x6c94b0;
-
-static void * __thiscall
-(*pw_get_dialog_item)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
-
-static int * __thiscall
-(*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;
+static struct ui_dialog * __thiscall (*pw_get_dialog)(void *ui_manager, const char *name) = (void *)0x6c94b0;
+static void * __thiscall (*pw_get_dialog_item)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
+static int * __thiscall (*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;
 
 HWND pw_wait_for_win(void);
 HMODULE pw_find_pwi_game_data(void);
