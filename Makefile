@@ -10,7 +10,7 @@ clean:
 	rm -f $(OBJECTS:%.o=build/%.o) $(OBJECTS:%.o=build/%.d)
 
 build/gamehook.dll: $(OBJECTS:%.o=build/%.o)
-	gcc $(CFLAGS) -o $@ -s -shared $^ -Wl,--subsystem,windows -lcimgui -lgdi32 -ld3d9 -limm32 -lstdc++
+	gcc $(CFLAGS) -o $@ -s -shared $^ -Wl,--subsystem,windows -lcimgui -lgdi32 -ld3d9 -limm32 -static-libgcc
 
 build/%.o: %.c
 	gcc $(CFLAGS) -c -o $@ $<
