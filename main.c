@@ -407,7 +407,7 @@ ThreadMain(LPVOID _unused)
 	/* always enable ingame console */
 	patch_mem(0x927cc8, "\x01", 1);
 
-	d3d_hook(g_window);
+	d3d_hook();
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);

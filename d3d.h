@@ -32,7 +32,7 @@ extern struct win_settings {
 	bool show_mp_bars;
 } g_settings;
 
-int d3d_hook(HWND hwnd);
+int d3d_hook();
 LRESULT d3d_handle_input(UINT event, WPARAM data, LPARAM lparam);
 
 #endif /* PW_D3D */

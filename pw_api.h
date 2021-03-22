@@ -22,6 +22,9 @@
  * THE SOFTWARE.
  */
 
+#ifndef PW_API_H
+#define PW_API_H
+
 #include <windows.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -74,7 +77,9 @@ struct mob {
 	uint32_t id;
 	char unk4[12];
 	uint32_t hp;
-	char unk5[236];
+	char unk4b[36];
+	uint32_t max_hp;
+	char unk5[196];
 	uint32_t disappear_count; /* number of ticks after mob death */
 	uint32_t disappear_maxval; /* ticks before the mob disappears */
 	char unk6[128];
@@ -94,6 +99,12 @@ struct world_objects {
 	char unk1[32];
 	char unk2[4]; /* player list? */
 	struct mob_list *moblist;
+};
+
+struct ui_dialog {
+	char unk1[84];
+	uint32_t pos_x;
+	uint32_t pos_y;
 };
 
 struct game_data {
@@ -144,6 +155,15 @@ extern struct object * __thiscall (*pw_get_object)(struct world_objects *world, 
 extern unsigned __thiscall (*pw_can_touch_target)(struct player *player, float tgt_coords[3], float tgt_radius, int touch_type, float max_melee_dist);
 extern void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2);
 
+static struct ui_dialog * __thiscall
+(*pw_get_dialog)(void *ui_manager, const char *name) = (void *)0x6c94b0;
+
+static void * __thiscall
+(*pw_get_dialog_item)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
+
+static int * __thiscall
+(*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;
+
 HWND pw_wait_for_win(void);
 HMODULE pw_find_pwi_game_data(void);
 
@@ -152,3 +172,5 @@ int pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args);
 int pw_log_acolor(unsigned argb_color, const char *fmt, ...);
 int pw_log_color(unsigned rgb_color, const char *fmt, ...);
 int pw_log(const char *fmt, ...);
+
+#endif /* PW_API_H */

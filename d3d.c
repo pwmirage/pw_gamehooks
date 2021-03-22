@@ -29,6 +29,7 @@
 #include <d3d9.h>
 
 #include "common.h"
+#include "pw_api.h"
 #include "d3d.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
@@ -37,9 +38,84 @@
 static HRESULT (__stdcall *endScene_org)(LPDIRECT3DDEVICE9 pDevice);
 static HRESULT (__stdcall *Reset_org)(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
 static LPDIRECT3DDEVICE9 g_device = NULL;
-static HWND g_window = NULL;
+static ImFont *g_font;
+static ImFont *g_font13;
+
+static unsigned g_target_dialog_pos_y;
 
 struct win_settings g_settings;
+
+static void
+show_target_hp(void)
+{
+	if (!g_pw_data || !g_pw_data->game || g_pw_data->game->logged_in != 2) {
+		return;
+	}
+
+	if (!g_pw_data->game->player || !g_pw_data->game->player->target_id) {
+		return;
+	}
+
+	static uint32_t cached_target_id = 0;
+	static struct object *cached_target = NULL;
+
+	if (g_pw_data->game->player->target_id != cached_target_id) {
+		cached_target = pw_get_object(g_pw_data->game->wobj, g_pw_data->game->player->target_id, 0);
+	}
+
+	if (!cached_target) {
+		return;
+	}
+
+	if (cached_target->type != 6) {
+		/* not a monster */
+		return;
+	}
+
+	struct mob *mob = (void *)cached_target;
+	if (mob->disappear_count > 0) {
+		/* mob is dead and already disappearing */
+		return;
+	}
+
+	if (!g_target_dialog_pos_y) {
+		struct ui_dialog *dialog = pw_get_dialog(g_pw_data->game->ui->ui_manager, "Win_HpOther");
+		g_target_dialog_pos_y = dialog->pos_x;
+	}
+
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%d / %d", mob->hp, mob->max_hp);
+
+	ImVec2 text_size;
+	igCalcTextSize(&text_size, buf, buf + strlen(buf), false, 0);
+
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground;
+
+	bool show = true;
+	ImGuiViewport* viewport = igGetMainViewport();
+	ImVec2 work_pos = viewport->WorkPos;
+	ImVec2 work_size = viewport->WorkSize;
+	ImVec2 window_pos, window_pos_pivot ;
+
+	window_pos.x = g_target_dialog_pos_y + 124 - text_size.x / 2;
+	window_pos.y = -3;
+
+	igPushFont(g_font13);
+
+	igSetNextWindowPos(window_pos, ImGuiCond_Always, (ImVec2){0, 0});
+	igBegin("target_hp1", &show, window_flags);
+	igTextColored((ImVec4){ 0x00, 0x00, 0x00, 0xff }, buf);
+	igEnd();
+
+	window_pos.x -= 1;
+	window_pos.y -= 1;
+	igSetNextWindowPos(window_pos, ImGuiCond_Always, (ImVec2){0, 0});
+	igBegin("target_hp2", &show, window_flags);
+	igText(buf);
+	igEnd();
+
+	igPopFont();
+}
 
 static HRESULT APIENTRY
 hooked_endScene(LPDIRECT3DDEVICE9 device)
@@ -52,7 +128,9 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 		ImGui_ImplDX9_Init(device);
 
 		ImGuiIO *io = igGetIO();
-		ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/fzxh1jw.ttf", 15, NULL, NULL);
+		//g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/fzxh1jw.ttf", 15, NULL, NULL);
+		g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
+		g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
 
 		igGetStyle()->DisplayWindowPadding = (ImVec2){ 50, 50 };
 	}
@@ -77,6 +155,8 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 		igEnd();
 	}
 
+	show_target_hp();
+
 	igShowDemoWindow(NULL);
 
 	igGetIO()->MouseDrawCursor = false;
@@ -97,18 +177,17 @@ hooked_Reset(LPDIRECT3DDEVICE9 device, D3DPRESENT_PARAMETERS* d3dpp)
 	ret = Reset_org(device, d3dpp);
 	ImGui_ImplDX9_CreateDeviceObjects();
 
+	g_target_dialog_pos_y = 0;
 	return ret;
 }
 
 int
-d3d_hook(HWND hwnd)
+d3d_hook()
 {
 	IDirect3D9* d3d;
 	LPDIRECT3DDEVICE9 dummy_dev = NULL;
 	D3DPRESENT_PARAMETERS d3dpp = {};
 	HRESULT rc;
-
-	g_window = hwnd;
 
 	d3d = Direct3DCreate9(D3D_SDK_VERSION);
 	if (!d3d) {
@@ -117,7 +196,7 @@ d3d_hook(HWND hwnd)
 
 	d3dpp.Windowed = false;
 	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	d3dpp.hDeviceWindow = hwnd;
+	d3dpp.hDeviceWindow = g_window;
 
 	rc = IDirect3D9_CreateDevice(d3d, D3DADAPTER_DEFAULT,
 			D3DDEVTYPE_HAL, d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING,
