@@ -92,10 +92,7 @@ show_target_hp(void)
 	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground;
 
 	bool show = true;
-	ImGuiViewport* viewport = igGetMainViewport();
-	ImVec2 work_pos = viewport->WorkPos;
-	ImVec2 work_size = viewport->WorkSize;
-	ImVec2 window_pos, window_pos_pivot ;
+	ImVec2 window_pos;
 
 	window_pos.x = g_target_dialog_pos_y + 124 - text_size.x / 2;
 	window_pos.y = -3;
@@ -131,8 +128,6 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 		//g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/fzxh1jw.ttf", 15, NULL, NULL);
 		g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
 		g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
-
-		igGetStyle()->DisplayWindowPadding = (ImVec2){ 50, 50 };
 	}
 
 	ImGui_ImplDX9_NewFrame();
@@ -140,8 +135,15 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 	igNewFrame();
 
 	if (g_settings.show) {
+		ImGuiViewport* viewport = igGetMainViewport();
+		ImVec2 work_size = viewport->WorkSize;
+		ImVec2 window_pos, window_pos_pivot;
+
+		window_pos.x = work_size.x - 5;
+		window_pos.y = work_size.y - 82;
+		igSetNextWindowPos(window_pos, ImGuiCond_FirstUseEver, (ImVec2){1, 1});
 		igSetNextWindowSize((ImVec2){270, 135}, ImGuiCond_FirstUseEver);
-		igBegin("Extra Settings", &g_settings.show, ImGuiWindowFlags_NoCollapse);
+		igBegin("Extra Settings", &g_settings.show, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
 		igText("All changes are applied immediately");
 		if (igCheckbox("Freeze window on focus lost", &g_settings.freeze_win)) {
 			patch_mem(0x42ba47, g_settings.freeze_win ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
