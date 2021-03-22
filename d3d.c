@@ -43,7 +43,7 @@ static ImFont *g_font13;
 
 static unsigned g_target_dialog_pos_y;
 
-struct win_settings g_settings;
+bool g_settings_show;
 
 static void
 show_target_hp(void)
@@ -134,7 +134,7 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 	ImGui_ImplWin32_NewFrame();
 	igNewFrame();
 
-	if (g_settings.show) {
+	if (g_settings_show) {
 		ImGuiViewport* viewport = igGetMainViewport();
 		ImVec2 work_size = viewport->WorkSize;
 		ImVec2 window_pos, window_pos_pivot;
@@ -143,16 +143,19 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 		window_pos.y = work_size.y - 82;
 		igSetNextWindowPos(window_pos, ImGuiCond_FirstUseEver, (ImVec2){1, 1});
 		igSetNextWindowSize((ImVec2){270, 135}, ImGuiCond_FirstUseEver);
-		igBegin("Extra Settings", &g_settings.show, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+		igBegin("Extra Settings", &g_settings_show, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
 		igText("All changes are applied immediately");
-		if (igCheckbox("Freeze window on focus lost", &g_settings.freeze_win)) {
-			patch_mem(0x42ba47, g_settings.freeze_win ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+		bool freeze_win = *(uint8_t *)0x42ba47 == 0x0f;
+		if (igCheckbox("Freeze window on focus lost", &freeze_win)) {
+			patch_mem(0x42ba47, freeze_win ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
 		}
-		if (igCheckbox("Show HP bars above entities", &g_settings.show_hp_bars)) {
-			*(bool *)0x927d97 = !!g_settings.show_hp_bars;
+		bool show_hp = !!*(uint8_t *)0x927d97;
+		if (igCheckbox("Show HP bars above entities", &show_hp)) {
+			*(bool *)0x927d97 = !!show_hp;
 		}
-		if (igCheckbox("Show MP bars above entities", &g_settings.show_mp_bars)) {
-			*(bool *)0x927d98 = !!g_settings.show_mp_bars;
+		bool show_mp = !!*(uint8_t *)0x927d98;
+		if (igCheckbox("Show MP bars above entities", &show_mp)) {
+			*(bool *)0x927d98 = !!show_mp;
 		}
 		igEnd();
 	}
@@ -224,6 +227,7 @@ d3d_hook()
 
 	trampoline_fn((void **)&endScene_org, 7, hooked_endScene);
 	trampoline_fn((void **)&Reset_org, 5, hooked_Reset);
+
 	return S_OK;
 }
 

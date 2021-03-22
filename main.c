@@ -117,7 +117,7 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 	pw_log("ctrl: %s, win: %s\n", ctrl_name, parent_name);
 
 	if (strcmp(parent_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
-		g_settings.show = !g_settings.show;
+		g_settings_show = !g_settings_show;
 		return 1;
 	}
 
