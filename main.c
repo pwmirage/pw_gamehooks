@@ -41,6 +41,7 @@ static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
 static wchar_t g_version[32];
 static wchar_t g_build[32];
+static HMODULE g_unload_event;
 
 static void
 set_borderless_fullscreen(bool is_fullscreen)
@@ -327,7 +328,7 @@ hooked_exit(void)
 	/* our hacks sometimes crash on exit, not sure why. they're hacks, so just ignore the errors */
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 
-	PostQuitMessage(0);
+	SetEvent(g_unload_event);
 }
 
 static DWORD WINAPI
@@ -411,11 +412,12 @@ ThreadMain(LPVOID _unused)
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
 
+	g_unload_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+
 	/* process our custom windows input */
-	while (GetMessage(&msg, NULL, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
+	WaitForSingleObject(g_unload_event, (DWORD)INFINITY);
+
+	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
 
 	if (g_exiting) {
 		/* no need to cleanup anything */
@@ -445,7 +447,7 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 	}
 	case DLL_PROCESS_DETACH:
 		PostThreadMessageA(g_tid, WM_QUIT, 0, 0);
-		SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
+		SetEvent(g_unload_event);
 
 		/* wait for cleanup (not necessarily thread termination) */
 		while (!g_unloading && !g_tid_finished) {
