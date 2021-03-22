@@ -159,7 +159,7 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 
 	show_target_hp();
 
-	igShowDemoWindow(NULL);
+	//igShowDemoWindow(NULL);
 
 	igGetIO()->MouseDrawCursor = false;
 
