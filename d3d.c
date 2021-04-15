@@ -44,12 +44,27 @@ static LPDIRECT3DDEVICE9 g_device = NULL;
 static ImFont *g_font;
 static ImFont *g_font13;
 
-static unsigned g_target_dialog_pos_y;
+unsigned g_target_dialog_pos_y;
 
 bool g_settings_show;
+bool g_update_show;
+bool g_use_borderless = true;
 
 static void
-show_target_hp(void)
+show_help_marker(const char* desc)
+{
+	igTextDisabled("(?)");
+	if (igIsItemHovered(0)) {
+		igBeginTooltip();
+		igPushTextWrapPos(igGetFontSize() * 35.0f);
+		igTextUnformatted(desc, NULL);
+		igPopTextWrapPos();
+		igEndTooltip();
+	}
+}
+
+static void
+try_show_target_hp(void)
 {
 	if (!g_pw_data || !g_pw_data->game || g_pw_data->game->logged_in != 2) {
 		return;
@@ -117,6 +132,87 @@ show_target_hp(void)
 	igPopFont();
 }
 
+static void
+try_show_settings_win(void)
+{
+	if (!g_settings_show) {
+		return;
+	}
+
+	ImGuiViewport* viewport = igGetMainViewport();
+	ImVec2 work_size = viewport->WorkSize;
+	ImVec2 window_pos, window_pos_pivot;
+
+	window_pos.x = work_size.x - 5;
+	window_pos.y = work_size.y - 82;
+	igSetNextWindowPos(window_pos, ImGuiCond_FirstUseEver, (ImVec2){1, 1});
+	igSetNextWindowSize((ImVec2){270, 160}, ImGuiCond_Always);
+	igBegin("Extra Settings", &g_settings_show, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+	igText("All changes are applied immediately");
+	bool freeze_win = *(uint8_t *)0x42ba47 == 0x0f;
+	if (igCheckbox("Freeze window on focus lost", &freeze_win)) {
+		patch_mem(0x42ba47, freeze_win ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+	}
+	bool show_hp = !!*(uint8_t *)0x927d97;
+	if (igCheckbox("Show HP bars above entities", &show_hp)) {
+		*(bool *)0x927d97 = !!show_hp;
+	}
+	bool show_mp = !!*(uint8_t *)0x927d98;
+	if (igCheckbox("Show MP bars above entities", &show_mp)) {
+		*(bool *)0x927d98 = !!show_mp;
+	}
+	igCheckbox("Force borderless fullscreen", &g_use_borderless);
+	igSameLine(0, -1); show_help_marker("Effective on next fullscreen change");
+	igEnd();
+}
+
+static DWORD __stdcall
+update_cb(void *arg)
+{
+	STARTUPINFO si = {};
+	PROCESS_INFORMATION pi = {};
+
+	si.cb = sizeof(si);
+
+	SetCurrentDirectory("..");
+	char buf[] = "pwmirage.exe --quickupdate";
+	CreateProcess(NULL, buf, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+	/* ExitProcess doesn't work, so... */
+	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+	*(uint32_t *)0x0 = 42;
+	return 0;
+}
+
+static void
+try_show_update_win(void)
+{
+	if (g_update_show) {
+		igOpenPopup("MirageUpdate", 0);
+		g_update_show = false;
+	}
+
+	ImVec2 center;
+	ImGuiViewport_GetCenter(&center, igGetMainViewport());
+	igSetNextWindowPos(center, ImGuiCond_Appearing, (ImVec2){ 0.5f, 0.5f });
+
+	if (igBeginPopupModal("MirageUpdate", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+		igText("New PW Mirage client update is available.\nWould you like to download it now?");
+		igSeparator();
+
+		if (igButton("OK", (ImVec2){ 120, 0 })) {
+			DWORD tid;
+			CreateThread(NULL, 0, update_cb, NULL, 0, &tid);
+		}
+		igSetItemDefaultFocus();
+		igSameLine(0, -1);
+		if (igButton("Cancel", (ImVec2){ 120, 0 })) {
+			igCloseCurrentPopup();
+		}
+		igEndPopup();
+	}
+}
+
+
 static HRESULT APIENTRY
 hooked_endScene(LPDIRECT3DDEVICE9 device)
 {
@@ -137,33 +233,9 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 	ImGui_ImplWin32_NewFrame();
 	igNewFrame();
 
-	if (g_settings_show) {
-		ImGuiViewport* viewport = igGetMainViewport();
-		ImVec2 work_size = viewport->WorkSize;
-		ImVec2 window_pos, window_pos_pivot;
-
-		window_pos.x = work_size.x - 5;
-		window_pos.y = work_size.y - 82;
-		igSetNextWindowPos(window_pos, ImGuiCond_FirstUseEver, (ImVec2){1, 1});
-		igSetNextWindowSize((ImVec2){270, 135}, ImGuiCond_FirstUseEver);
-		igBegin("Extra Settings", &g_settings_show, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-		igText("All changes are applied immediately");
-		bool freeze_win = *(uint8_t *)0x42ba47 == 0x0f;
-		if (igCheckbox("Freeze window on focus lost", &freeze_win)) {
-			patch_mem(0x42ba47, freeze_win ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
-		}
-		bool show_hp = !!*(uint8_t *)0x927d97;
-		if (igCheckbox("Show HP bars above entities", &show_hp)) {
-			*(bool *)0x927d97 = !!show_hp;
-		}
-		bool show_mp = !!*(uint8_t *)0x927d98;
-		if (igCheckbox("Show MP bars above entities", &show_mp)) {
-			*(bool *)0x927d98 = !!show_mp;
-		}
-		igEnd();
-	}
-
-	show_target_hp();
+	try_show_target_hp();
+	try_show_settings_win();
+	try_show_update_win();
 
 	//igShowDemoWindow(NULL);
 

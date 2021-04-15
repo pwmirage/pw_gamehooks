@@ -26,6 +26,7 @@
 #define PW_D3D
 
 extern bool g_settings_show;
+extern bool g_update_show;
 
 int d3d_hook();
 LRESULT d3d_handle_input(UINT event, WPARAM data, LPARAM lparam);

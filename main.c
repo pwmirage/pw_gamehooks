@@ -37,6 +37,8 @@
 #include "common.h"
 #include "d3d.h"
 
+extern bool g_use_borderless;
+
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
 static wchar_t g_version[32];
@@ -83,9 +85,15 @@ setup_fullscreen_combo(void *unk1, void *unk2, unsigned *is_fullscreen)
 {
 	unsigned __stdcall (*real_fn)(void *, void *, unsigned *) = (void *)0x6d5ba0;
 
-	*is_fullscreen = g_fullscreen;
+	if (g_use_borderless) {
+		*is_fullscreen = g_fullscreen;
+	}
+
 	real_fn(unk1, unk2, is_fullscreen);
-	*is_fullscreen = 0;
+
+	if (g_use_borderless) {
+		*is_fullscreen = 0;
+	}
 }
 
 static unsigned __thiscall
@@ -94,10 +102,13 @@ read_fullscreen_opt(void *unk1, void *unk2, void *unk3, void *unk4)
 	unsigned __thiscall (*real_fn)(void *, void *, void *, void *) = (void *)0x6ff590;
 	unsigned is_fullscreen = real_fn(unk1, unk2, unk3, unk4);
 
-	g_sel_fullscreen = is_fullscreen;
-	pw_log("fullscreen: %d\n", g_sel_fullscreen);
-	/* always return false */
-	return 0;
+	if (g_use_borderless) {
+		g_sel_fullscreen = is_fullscreen;
+		/* always return false */
+		return 0;
+	}
+
+	return is_fullscreen;
 }
 
 static unsigned __stdcall
@@ -129,9 +140,11 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 		} else if (strcmp(ctrl_name, "IDCANCEL") == 0) {
 			g_sel_fullscreen = g_fullscreen;
 		} else if (strcmp(ctrl_name, "apply") == 0 || strcmp(ctrl_name, "confirm") == 0) {
-			pw_log("sel: %d, real: %d\n", g_sel_fullscreen, g_fullscreen);
-			if (g_sel_fullscreen != g_fullscreen) {
-				set_borderless_fullscreen(g_sel_fullscreen);
+			if (g_use_borderless) {
+				pw_log("sel: %d, real: %d\n", g_sel_fullscreen, g_fullscreen);
+				if (g_sel_fullscreen != g_fullscreen) {
+					set_borderless_fullscreen(g_sel_fullscreen);
+				}
 			}
 		}
 	}
@@ -262,39 +275,18 @@ set_pw_version(void)
 	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
 }
 
-DWORD __stdcall
-on_add_chat_message_cb(void *arg)
-{
-	int rc = MessageBox(g_window, "New PW Mirage client update is available.\nWould you like to download it now?", "Mirage Update", MB_YESNO);
-
-	if (rc != IDYES) {
-		return 0;
-	}
-
-	SetCurrentDirectory("..");
-	ShellExecute(NULL, NULL, "pwmirage.exe", "--quickupdate", NULL, SW_SHOW);
-	/* ExitProcess doesn't work, so... */
-	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-	*(uint32_t *)0x0 = 42;
-	return 0;
-}
-
 static void __thiscall
-(*on_add_chat_message_org_fn)(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion) = (void *)0x552ea0;
-
-static void __thiscall
-on_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion)
+hooked_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion)
 {
 	if (channel == 12) {
 		pw_log("received (%d): %S", channel, str);
 		if (wcscmp(str, L"update") == 0) {
-			DWORD tid;
-			CreateThread(NULL, 0, on_add_chat_message_cb, NULL, 0, &tid);
+			g_update_show = true;
 		}
 		return;
 	}
 
-	on_add_chat_message_org_fn(cecgamerun, str, channel, idPlayer, szName, byFlag, emotion);
+	pw_add_chat_message(cecgamerun, str, channel, idPlayer, szName, byFlag, emotion);
 }
 
 static wchar_t g_win_title[128];
@@ -404,7 +396,7 @@ ThreadMain(LPVOID _unused)
 	/* force screenshots via direct3d, not angellica engine */
 	patch_mem(0x433e35, "\xeb", 1);
 
-	trampoline_fn((void **)&on_add_chat_message_org_fn, 7, on_add_chat_message);
+	trampoline_fn((void **)&pw_add_chat_message, 7, hooked_add_chat_message);
 
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
