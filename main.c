@@ -316,6 +316,30 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 	return ret;
 }
 
+static void
+hooked_pw_get_info_on_acquire(unsigned char inv_id, unsigned char slot_id)
+{
+    unsigned *expire_time;
+    unsigned need_info;
+
+    __asm__(
+            "mov %0, eax;"
+            : "=r"(need_info));
+
+    if (need_info) {
+        pw_get_item_info(inv_id, slot_id);
+        return;
+    }
+
+    /* read the upper frame's stack */
+    expire_time = (unsigned *)(&expire_time + 11);
+    if (*expire_time == 0x631b) {
+        /* hooked magic number, this item came from a task and the above time is not valid yet */
+        *expire_time = 0;
+        pw_get_item_info(inv_id, slot_id);
+    }
+}
+
 static DWORD g_tid;
 static bool g_tid_finished = false;
 bool g_exiting = false;
@@ -409,6 +433,11 @@ ThreadMain(LPVOID _unused)
 
 	/* always enable ingame console */
 	patch_mem(0x927cc8, "\x01", 1);
+
+	/* always try to get detailed item info on accquire */
+	patch_mem(0x44cdae, "\x66\x90", 2);
+	patch_mem(0x44cd41, "\x1b\x63", 2);
+	patch_jmp32(0x44cdb6, (uintptr_t)hooked_pw_get_info_on_acquire);
 
 	d3d_hook();
 
