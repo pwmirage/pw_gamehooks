@@ -316,6 +316,22 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 	return ret;
 }
 
+static void __thiscall
+hooked_pw_console_cmd(void *ui_manager, const wchar_t *msg)
+{
+	wchar_t tmp[512];
+
+	if (msg[0] == 'd' && msg[1] == ' ') {
+		_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd %s", msg + 2);
+		msg = tmp;
+	} else if (msg[0] == 'd' && msg[1] == 'i' && msg[2] == ' ') {
+		_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd 10800 %s", msg + 3);
+		msg = tmp;
+	}
+
+	pw_console_cmd(ui_manager, msg);
+}
+
 static void
 hooked_pw_get_info_on_acquire(unsigned char inv_id, unsigned char slot_id)
 {
