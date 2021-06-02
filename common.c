@@ -266,6 +266,22 @@ trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn)
 }
 
 void
+trampoline_winapi_fn(void **orig_fn, void *fn)
+{
+	uint32_t addr = (uintptr_t)*orig_fn;
+	char buf[7];
+
+	buf[0] = 0xe9; /* jmp */
+	u32_to_str(buf + 1, (uint32_t)(uintptr_t)fn - addr);
+	buf[5] = 0xeb; /* short jump */
+	buf[6] = 0xf9; /* 7 bytes before */
+
+	/* override 5 preceeding bytes (nulls) and 2 leading bytes */
+	patch_mem(addr - 5, buf, 7);
+	*orig_fn += 2;
+}
+
+void
 restore_mem(void)
 {
 	struct mem_region_4kb *reg_4k;

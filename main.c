@@ -33,6 +33,8 @@
 #include <stdbool.h>
 #include <assert.h>
 
+#include "wingdi.h"
+
 #include "pw_api.h"
 #include "common.h"
 #include "d3d.h"
@@ -374,6 +376,16 @@ hooked_exit(void)
 	SetEvent(g_unload_event);
 }
 
+static HFONT WINAPI (*org_CreateFontIndirectExW)(ENUMLOGFONTEXDVW* lpelf);
+static HFONT WINAPI hooked_CreateFontIndirectExW(ENUMLOGFONTEXDVW* lpelf)
+{
+	LOGFONTW *lplf = &lpelf->elfEnumLogfontEx.elfLogFont;
+	lplf->lfHeight = 17;
+	lplf->lfQuality = ANTIALIASED_QUALITY;
+	wcscpy(lplf->lfFaceName, L"Microsoft Sans Serif");
+	return org_CreateFontIndirectExW(lpelf);
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -407,6 +419,11 @@ ThreadMain(LPVOID _unused)
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
 
+	HMODULE hGdiFull = GetModuleHandle("gdi32.dll");
+
+	org_CreateFontIndirectExW = (void *)GetProcAddress(hGdiFull, "CreateFontIndirectExW");
+	trampoline_winapi_fn((void **)&org_CreateFontIndirectExW, (void *)hooked_CreateFontIndirectExW);
+
 	/* "teleport" other players only when they're moving >= 25m/s (instead of default >= 10m/s) */
 	patch_mem_u32(0x442bee, (uint32_t)&g_local_max_move_speed);
 	patch_mem_u32(0x442ff2, (uint32_t)&g_local_max_move_speed);
@@ -437,6 +454,7 @@ ThreadMain(LPVOID _unused)
 	patch_mem(0x433e35, "\xeb", 1);
 
 	trampoline_fn((void **)&pw_add_chat_message, 7, hooked_add_chat_message);
+	trampoline_fn((void **)&pw_console_cmd, 6, hooked_pw_console_cmd);
 
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
