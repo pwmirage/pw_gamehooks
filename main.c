@@ -32,8 +32,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <assert.h>
-
-#include "wingdi.h"
+#include <wingdi.h>
 
 #include "pw_api.h"
 #include "common.h"
@@ -417,7 +416,10 @@ ThreadMain(LPVOID _unused)
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
 
-	HMODULE hGdiFull = GetModuleHandle("gdi32.dll");
+	HMODULE hGdiFull = GetModuleHandle("gdi32full.dll");
+	if (!hGdiFull) {
+		hGdiFull = GetModuleHandle("gdi32.dll");
+	}
 
 	org_CreateFontIndirectExW = (void *)GetProcAddress(hGdiFull, "CreateFontIndirectExW");
 	trampoline_winapi_fn((void **)&org_CreateFontIndirectExW, (void *)hooked_CreateFontIndirectExW);
