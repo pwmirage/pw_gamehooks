@@ -380,8 +380,6 @@ static HFONT WINAPI (*org_CreateFontIndirectExW)(ENUMLOGFONTEXDVW* lpelf);
 static HFONT WINAPI hooked_CreateFontIndirectExW(ENUMLOGFONTEXDVW* lpelf)
 {
 	LOGFONTW *lplf = &lpelf->elfEnumLogfontEx.elfLogFont;
-	lplf->lfHeight = 17;
-	lplf->lfQuality = ANTIALIASED_QUALITY;
 	wcscpy(lplf->lfFaceName, L"Microsoft Sans Serif");
 	return org_CreateFontIndirectExW(lpelf);
 }
