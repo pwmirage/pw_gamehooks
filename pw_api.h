@@ -139,6 +139,7 @@ static void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, u
 static void __thiscall (*pw_console_cmd)(void *ui_manager, const wchar_t *msg) = (void *)0x54b440;
 static unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2) = (void *)0x431f30;
 static unsigned char (*pw_xz_dir_to_byte)(float dirX, float dirZ) = (void *)0x4179a0;
+static bool __thiscall (*pw_translate3dpos2screen)(void *viewport, float v3d[3], float v2d[3]) = (void *)0x71b1c0;
 static void __thiscall (*pw_add_chat_message)(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion) = (void *)0x552ea0;
 static void (*pw_get_item_info)(unsigned char inv_id, unsigned char slot_id) = (void *)0x5a85b0;
 

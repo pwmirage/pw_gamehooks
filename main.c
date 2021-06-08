@@ -406,6 +406,17 @@ static HFONT WINAPI hooked_CreateFontIndirectExW(ENUMLOGFONTEXDVW* lpelf)
 	return org_CreateFontIndirectExW(lpelf);
 }
 
+
+static bool __thiscall
+hooked_translate3dpos2screen(void *viewport, float v3d[3], float v2d[3])
+{
+	bool ret = pw_translate3dpos2screen(viewport, v3d, v2d);
+	/* the position is usually converted to int and it often twitches by 1px.
+	 * adding 0.5 helps a ton even though it's not a perfect solution */
+	v2d[0] += 0.5;
+	return ret;
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -496,6 +507,7 @@ ThreadMain(LPVOID _unused)
 	patch_mem(0x44cd41, "\x1b\x63", 2);
 	patch_jmp32(0x44cdb6, (uintptr_t)hooked_pw_get_info_on_acquire);
 
+	patch_jmp32(0x471f70, (uintptr_t)hooked_translate3dpos2screen);
 	//trampoline_fn((void **)&pw_item_add_ext_desc, 10, hooked_item_add_ext_desc);
 
 	d3d_hook();
