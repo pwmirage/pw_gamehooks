@@ -375,6 +375,13 @@ hooked_exit(void)
 	SetEvent(g_unload_event);
 }
 
+static void __stdcall
+hooked_crash_handler(int unused_1, void *unused_2)
+{
+	/* exit with a regular crash dialogue */
+	*(int *)0x0 = 1;
+}
+
 static void __fastcall
 hooked_item_add_ext_desc(void *item)
 {
@@ -440,8 +447,6 @@ ThreadMain(LPVOID _unused)
 	patch_jmp32(0x4faea2, (uintptr_t)setup_fullscreen_combo);
 	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
 
-	/* don't run creportbugs on crash */
-	patch_mem(0x8cfb40, "_", 1);
 	/* don't run pwprotector */
 	patch_mem(0x8cfb30, "_", 1);
 
@@ -449,6 +454,7 @@ ThreadMain(LPVOID _unused)
 
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
+	patch_jmp32(0x417a6d, (uintptr_t)hooked_crash_handler);
 
 	HMODULE hGdiFull = GetModuleHandle("gdi32full.dll");
 	if (!hGdiFull) {
