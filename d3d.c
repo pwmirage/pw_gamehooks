@@ -306,6 +306,12 @@ d3d_hook()
 	return S_OK;
 }
 
+void
+d3d_unhook(void)
+{
+	g_device = NULL;
+}
+
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 LRESULT

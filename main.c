@@ -533,6 +533,7 @@ ThreadMain(LPVOID _unused)
 	g_unloading = true;
 
 	restore_mem();
+	d3d_unhook();
 	g_tid_finished = true;
 	return 0;
 }
