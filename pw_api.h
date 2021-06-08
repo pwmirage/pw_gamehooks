@@ -162,6 +162,8 @@ static void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465
 static struct ui_dialog * __thiscall (*pw_get_dialog)(void *ui_manager, const char *name) = (void *)0x6c94b0;
 static void * __thiscall (*pw_get_dialog_item)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
 static int * __thiscall (*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;
+static void __fastcall (*pw_item_add_ext_desc)(void *item) = (void *)0x48da10;
+static int * __thiscall (*pw_item_desc_add_wstr)(void *item, wchar_t *wstr) = (void *)0x6f78d0;
 
 HWND pw_wait_for_win(void);
 HMODULE pw_find_pwi_game_data(void);

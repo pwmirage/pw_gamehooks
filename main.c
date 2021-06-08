@@ -375,6 +375,29 @@ hooked_exit(void)
 	SetEvent(g_unload_event);
 }
 
+static void __fastcall
+hooked_item_add_ext_desc(void *item)
+{
+	static unsigned char r, g, b;
+	static wchar_t wcolor[32] = L"^ffffff\r\rcolorful!!!\r\r";
+	const char *n2s = "0123456789abcdef";
+	static int cnt;
+
+	r += 1;
+	g += 2;
+	b += 3;
+
+	wcolor[1] = n2s[r >> 4];
+	wcolor[2] = n2s[r & 0xf];
+	wcolor[3] = n2s[g >> 4];
+	wcolor[4] = n2s[g & 0xf];
+	wcolor[5] = n2s[b >> 4];
+	wcolor[6] = n2s[b & 0xf];
+
+	pw_item_desc_add_wstr(item + 0x44, wcolor);
+	pw_item_add_ext_desc(item);
+}
+
 static HFONT WINAPI (*org_CreateFontIndirectExW)(ENUMLOGFONTEXDVW* lpelf);
 static HFONT WINAPI hooked_CreateFontIndirectExW(ENUMLOGFONTEXDVW* lpelf)
 {
@@ -472,6 +495,8 @@ ThreadMain(LPVOID _unused)
 	patch_mem(0x44cdae, "\x66\x90", 2);
 	patch_mem(0x44cd41, "\x1b\x63", 2);
 	patch_jmp32(0x44cdb6, (uintptr_t)hooked_pw_get_info_on_acquire);
+
+	//trampoline_fn((void **)&pw_item_add_ext_desc, 10, hooked_item_add_ext_desc);
 
 	d3d_hook();
 
