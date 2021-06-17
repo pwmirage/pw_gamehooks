@@ -161,10 +161,15 @@ static unsigned __thiscall (*pw_can_touch_target)(struct player *player, float t
 static void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465140;
 
 static struct ui_dialog * __thiscall (*pw_get_dialog)(void *ui_manager, const char *name) = (void *)0x6c94b0;
-static void * __thiscall (*pw_get_dialog_item)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
+static void __thiscall * (*pw_dialog_show)(void *dialog, bool do_show, bool is_modal, bool is_active) = (void *)0x6d2e00;
+static void * __thiscall (*pw_dialog_get_el)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
 static int * __thiscall (*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;
 static void __fastcall (*pw_item_add_ext_desc)(void *item) = (void *)0x48da10;
 static int * __thiscall (*pw_item_desc_add_wstr)(void *item, wchar_t *wstr) = (void *)0x6f78d0;
+
+static void __thiscall (*pw_fashion_preview_set_item)(void *fashion_win, void *item, void *slot_el) = (void *)0x4c2d80;
+static void * (*pw_alloc_item)(uint32_t id, uint32_t expire_time, uint32_t count, uint32_t id_space) = (void *)0x48cd70;
+static void (*pw_free)(void *addr) = (void *)0x6f5490;
 
 HWND pw_wait_for_win(void);
 HMODULE pw_find_pwi_game_data(void);

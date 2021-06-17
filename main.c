@@ -119,6 +119,8 @@ save_fullscreen_opt(void *unk1, void *unk2, unsigned is_fullscreen)
 	return real_fn(unk1, unk2, g_fullscreen);
 }
 
+static bool g_ignore_next_craft_change = false;
+
 /* button clicks / slider changes / etc */
 static unsigned __stdcall
 on_ui_change(const char *ctrl_name, void *parent_win)
@@ -131,6 +133,10 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 	if (strcmp(parent_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
 		g_settings_show = !g_settings_show;
 		return 1;
+	}
+
+	if (strcmp(parent_name, "Win_Produce") == 0 && strncmp(ctrl_name, "set", 3) == 0) {
+		g_ignore_next_craft_change = true;
 	}
 
 	unsigned ret = real_fn(ctrl_name, parent_win);
@@ -424,6 +430,52 @@ hooked_translate3dpos2screen(void *viewport, float v3d[3], float v2d[3])
 	return ret;
 }
 
+static void *
+hooked_alloc_produced_item(uint32_t id, uint32_t expire_time, uint32_t count, uint32_t id_space)
+{
+	void *item = pw_alloc_item(id, expire_time, count, id_space);
+	uint32_t class = *(uint32_t *)(item + 4);
+	uint32_t equip_mask = *(uint32_t *)(item + 36);
+
+	if (g_ignore_next_craft_change) {
+		/* this recipe was chosen automatically on tab switch, so don't change the fashion */
+		g_ignore_next_craft_change = false;
+		return item;
+	}
+
+	if (class == 6) {
+		/* fashion craft */
+		char tmpbuf[16];
+
+		void *preview_win = pw_get_dialog(g_pw_data->game->ui->ui_manager, "Win_FittingRoom");
+		int equip_id = 0;
+
+		for (int i = 13; i <= 16; i++) {
+			if (equip_mask & (1 << i)) {
+				equip_id = i;
+				break;
+			}
+		}
+
+		if (!equip_id) {
+			/* fashion, but can't be previewed */
+			return item;
+		}
+
+		bool was_shown = *(bool *)(preview_win + 0x6c);
+		if (!was_shown) {
+			pw_dialog_show(preview_win, true, false, false);
+		}
+
+		snprintf(tmpbuf, sizeof(tmpbuf), "Equip_%d", equip_id);
+		void *equip_el = pw_dialog_get_el(preview_win, tmpbuf);
+		pw_fashion_preview_set_item(preview_win, item, equip_el);
+	}
+
+	return item;
+}
+
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -515,6 +567,9 @@ ThreadMain(LPVOID _unused)
 
 	patch_jmp32(0x471f70, (uintptr_t)hooked_translate3dpos2screen);
 	//trampoline_fn((void **)&pw_item_add_ext_desc, 10, hooked_item_add_ext_desc);
+
+	/* open fashion preview when a fashion crafting recipe is clicked */
+	patch_jmp32(0x4f0238, (uintptr_t)hooked_alloc_produced_item);
 
 	d3d_hook();
 
