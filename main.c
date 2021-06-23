@@ -571,6 +571,9 @@ ThreadMain(LPVOID _unused)
 	/* open fashion preview when a fashion crafting recipe is clicked */
 	patch_jmp32(0x4f0238, (uintptr_t)hooked_alloc_produced_item);
 
+	/* always show the number of items to be crafted (even if you cant craft atm) */
+	patch_mem(0x4f0132, "\x66\x90", 2);
+
 	d3d_hook();
 
 	/* hook into PW input handling */
