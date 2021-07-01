@@ -240,18 +240,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		return TRUE;
 	}
 
-	if (!g_pw_data || !g_pw_data->game || g_pw_data->game->logged_in != 2) {
-		/* let the game handle this key */
-		return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
-	}
-
 	switch(event) {
-	case WM_KEYDOWN:
-		if (data == VK_TAB) {
-			select_closest_mob();
-			return TRUE;
-		}
-		break;
 	case WM_KILLFOCUS:
 		{
 			POINT mouse_pos;
@@ -269,6 +258,26 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 			}
 			break;
 		}
+	case WM_MENUCHAR:
+		CallWindowProc(g_orig_event_handler, window, event, data, lparam);
+		/* do not beep! */
+		return MNC_CLOSE << 16;
+	default:
+		break;
+	}
+
+	if (!g_pw_data || !g_pw_data->game || g_pw_data->game->logged_in != 2) {
+		/* let the game handle this key */
+		return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
+	}
+
+	switch(event) {
+	case WM_KEYDOWN:
+		if (data == VK_TAB) {
+			select_closest_mob();
+			return TRUE;
+		}
+		break;
 	default:
 		break;
 	}
