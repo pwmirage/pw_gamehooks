@@ -252,6 +252,23 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 			return TRUE;
 		}
 		break;
+	case WM_KILLFOCUS:
+		{
+			POINT mouse_pos;
+			RECT win_pos;
+			int safe_margin = 5;
+
+			GetWindowRect(g_window, &win_pos);
+			GetCursorPos(&mouse_pos);
+
+			if (mouse_pos.x > win_pos.left + safe_margin &&
+					mouse_pos.x < win_pos.right - safe_margin &&
+					mouse_pos.y > win_pos.top + safe_margin &&
+					mouse_pos.y < win_pos.bottom - safe_margin) {
+				ShowWindow(g_window, SW_MINIMIZE);
+			}
+			break;
+		}
 	default:
 		break;
 	}
@@ -474,7 +491,6 @@ hooked_alloc_produced_item(uint32_t id, uint32_t expire_time, uint32_t count, ui
 
 	return item;
 }
-
 
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
