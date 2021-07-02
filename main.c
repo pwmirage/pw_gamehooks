@@ -258,6 +258,19 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 			}
 			break;
 		}
+	case WM_SYSCOMMAND:
+		switch (data) {
+		case SC_MINIMIZE:
+			/* PW doesnt react to this message and keeps using CPU, so make it stop */
+			PostMessage(g_window, WM_ACTIVATEAPP, 0, 0);
+			break;
+		case SC_RESTORE:
+			PostMessage(g_window, WM_ACTIVATEAPP, 1, 0);
+			break;
+		default:
+			break;
+		}
+		break;
 	case WM_MENUCHAR:
 		CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 		/* do not beep! */
