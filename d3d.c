@@ -216,6 +216,10 @@ try_show_update_win(void)
 static HRESULT APIENTRY
 hooked_endScene(LPDIRECT3DDEVICE9 device)
 {
+	if (g_unloading) {
+		return endScene_org(device);
+	}
+
 	if (!g_device) {
 		g_device = device;
 		igCreateContext(NULL);
@@ -245,13 +249,17 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 	igRender();
 	ImGui_ImplDX9_RenderDrawData(igGetDrawData());
 
-	return endScene_org(g_device);
+	return endScene_org(device);
 }
 
 static HRESULT APIENTRY
 hooked_Reset(LPDIRECT3DDEVICE9 device, D3DPRESENT_PARAMETERS* d3dpp)
 {
 	HRESULT ret;
+
+	if (g_unloading) {
+		return Reset_org(device, d3dpp);
+	}
 
 	ImGui_ImplDX9_InvalidateDeviceObjects();
 	ret = Reset_org(device, d3dpp);
