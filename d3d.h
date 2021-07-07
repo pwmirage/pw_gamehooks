@@ -30,6 +30,7 @@ extern bool g_update_show;
 
 int d3d_hook();
 void d3d_unhook(void);
-LRESULT d3d_handle_input(UINT event, WPARAM data, LPARAM lparam);
+LRESULT d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam);
+LRESULT d3d_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
 
 #endif /* PW_D3D */

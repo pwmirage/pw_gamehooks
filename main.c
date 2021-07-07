@@ -233,14 +233,38 @@ select_closest_mob(void)
 
 static WNDPROC g_orig_event_handler;
 
+#ifndef WM_MOUSEHWHEEL
+#define WM_MOUSEHWHEEL 0x020E
+#endif
+
 static LRESULT CALLBACK
 event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
-	if (d3d_handle_input(event, data, lparam)) {
-		return TRUE;
-	}
-
 	switch(event) {
+	case WM_LBUTTONDOWN: case WM_LBUTTONDBLCLK:
+	case WM_RBUTTONDOWN: case WM_RBUTTONDBLCLK:
+	case WM_MBUTTONDOWN: case WM_MBUTTONDBLCLK:
+	case WM_XBUTTONDOWN: case WM_XBUTTONDBLCLK:
+	case WM_LBUTTONUP:
+	case WM_RBUTTONUP:
+	case WM_MBUTTONUP:
+	case WM_XBUTTONUP:
+	case WM_MOUSEWHEEL:
+	case WM_MOUSEHWHEEL:
+		if (d3d_handle_mouse(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
+	case WM_KEYDOWN:
+	case WM_SYSKEYDOWN:
+	case WM_KEYUP:
+	case WM_SYSKEYUP:
+	case WM_CHAR:
+	case WM_DEVICECHANGE:
+		if (d3d_handle_keyboard(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
 	case WM_KILLFOCUS:
 		{
 			POINT mouse_pos;

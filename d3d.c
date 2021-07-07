@@ -317,63 +317,28 @@ d3d_hook()
 void
 d3d_unhook(void)
 {
-	g_device = NULL;
 }
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 LRESULT
-d3d_handle_input(UINT event, WPARAM data, LPARAM lparam)
+d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam)
 {
-	ImGui_ImplWin32_WndProcHandler(g_window, event, data, lparam);
-
-	switch (event) {
-		case WM_LBUTTONDBLCLK:
-		case WM_LBUTTONDOWN:
-		case WM_LBUTTONUP:
-		case WM_MBUTTONDBLCLK:
-		case WM_MBUTTONDOWN:
-		case WM_MBUTTONUP:
-		case WM_MOUSEACTIVATE:
-		case WM_MOUSEHOVER:
-		case WM_MOUSEMOVE:
-		case WM_MOUSEWHEEL:
-		case WM_NCHITTEST:
-		case WM_NCLBUTTONDBLCLK:
-		case WM_NCLBUTTONDOWN:
-		case WM_NCLBUTTONUP:
-		case WM_NCMBUTTONDBLCLK:
-		case WM_NCMBUTTONDOWN:
-		case WM_NCMBUTTONUP:
-		case WM_NCMOUSEHOVER:
-		case WM_NCMOUSEMOVE:
-		case WM_NCRBUTTONDBLCLK:
-		case WM_NCRBUTTONDOWN:
-		case WM_NCRBUTTONUP:
-		case WM_NCXBUTTONDBLCLK:
-		case WM_NCXBUTTONDOWN:
-		case WM_NCXBUTTONUP:
-		case WM_RBUTTONDBLCLK:
-		case WM_RBUTTONDOWN:
-		case WM_RBUTTONUP:
-		case WM_XBUTTONDBLCLK:
-		case WM_XBUTTONDOWN:
-		case WM_XBUTTONUP:
-			return igGetIO()->WantCaptureMouse;
-		case WM_APPCOMMAND:
-		case WM_CHAR:
-		case WM_DEADCHAR:
-		case WM_HOTKEY:
-		case WM_KEYDOWN:
-		case WM_KEYUP:
-		case WM_SETFOCUS:
-		case WM_SYSDEADCHAR:
-		case WM_SYSKEYDOWN:
-		case WM_SYSKEYUP:
-			return igGetIO()->WantTextInput;
-		default:
-			break;
+	if (!g_device || g_unloading) {
+		return FALSE;
 	}
 
-	return FALSE;
+	ImGui_ImplWin32_WndProcHandler(g_window, event, data, lparam);
+	return igGetIO()->WantCaptureMouse;
+}
+
+LRESULT
+d3d_handle_keyboard(UINT event, WPARAM data, LPARAM lparam)
+{
+	if (!g_device || g_unloading) {
+		return FALSE;
+	}
+
+	ImGui_ImplWin32_WndProcHandler(g_window, event, data, lparam);
+	return igGetIO()->WantTextInput;
 }
