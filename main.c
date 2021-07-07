@@ -660,6 +660,8 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 			Sleep(50);
 		}
 
+		Sleep(1000);
+
 		return TRUE;
 	default:
 		return FALSE;
