@@ -538,6 +538,18 @@ hooked_alloc_produced_item(uint32_t id, uint32_t expire_time, uint32_t count, ui
 	return item;
 }
 
+static int __cdecl
+hooked_fseek(FILE *fp, int32_t off, int32_t mode)
+{
+	int64_t loff = off;
+
+	if (off < -65536) {
+		loff = *(uint32_t *)&off;
+	}
+
+	return _fseeki64(fp, loff, mode);
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -551,6 +563,8 @@ ThreadMain(LPVOID _unused)
 	}
 
 	set_pw_version();
+
+	patch_mem_u32(0x85f454, (uintptr_t)hooked_fseek);
 
 	patch_mem(0x40bf43, "\x81\xc4\x0c\x00\x00\x00", 6);
 
