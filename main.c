@@ -37,6 +37,7 @@
 #include "pw_api.h"
 #include "common.h"
 #include "d3d.h"
+#include "game_config.h"
 
 extern bool g_use_borderless;
 
@@ -554,11 +555,18 @@ static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
 	MSG msg;
+	int rc;
 
 	/* find and init some game data */
 
+	rc = game_config_parse("..\\patcher\\game.cfg");
+	if (rc != 0) {
+		MessageBox(NULL, "Can't load the config file at ../patcher/game.cfg", "Error", MB_OK);
+		return 1;
+	}
+
 	if (pw_find_pwi_game_data() == 0) {
-		MessageBox(NULL, "Failed to find PW process. Is the game running?", "Status", MB_OK);
+		MessageBox(NULL, "Failed to find PW process. Is the game running?", "Error", MB_OK);
 		return 1;
 	}
 
@@ -589,8 +597,10 @@ ThreadMain(LPVOID _unused)
 		hGdiFull = GetModuleHandle("gdi32.dll");
 	}
 
-	org_CreateFontIndirectExW = (void *)GetProcAddress(hGdiFull, "CreateFontIndirectExW");
-	trampoline_winapi_fn((void **)&org_CreateFontIndirectExW, (void *)hooked_CreateFontIndirectExW);
+	if (game_config_get("custom_tag_font", "0")[0] == '1') {
+		org_CreateFontIndirectExW = (void *)GetProcAddress(hGdiFull, "CreateFontIndirectExW");
+		trampoline_winapi_fn((void **)&org_CreateFontIndirectExW, (void *)hooked_CreateFontIndirectExW);
+	}
 
 	/* "teleport" other players only when they're moving >= 25m/s (instead of default >= 10m/s) */
 	patch_mem_u32(0x442bee, (uint32_t)&g_local_max_move_speed);
