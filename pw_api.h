@@ -65,10 +65,12 @@ struct player {
 	struct object obj;
 	char unk2[960];
 	uint32_t hp;
-	char unk3[1436];
-	uint32_t target_id;
-	char unk4[424];
+	char unk3[524];
 	struct skill *cur_skill;
+	char unk4[908];
+	uint32_t target_id;
+	char unk5[424];
+	struct skill *prep_skill;
 };
 
 struct mob {
@@ -134,6 +136,8 @@ static void (*pw_select_target)(int id) = (void *)0x5a8080;
 static void (*pw_move)(float *cur_pos, float *cur_pos_unused, int time, float speed, int move_mode, short timestamp) = (void *)0x5a7f70;
 static void (*pw_stop_move)(float *dest_pos, float speed, int move_mode, unsigned dir, short timestamp, int time) = (void *)0x5a8000;
 static void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids) = (void *)0x5a8a20;
+static bool __thiscall (*pw_try_use_skill)(struct player *host_player, int skill_id, unsigned is_combo, unsigned target_id, int force_atk) = (void *)0x4559d0;
+static void * __thiscall (*pw_get_skill_by_id)(struct player *host_player, int id, bool unk) = (void *)(0x459e50);
 static void (*pw_normal_attack)(unsigned char pvp_mask) = (void *)0x5a80c0;
 static void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color) = (void *)0x553cc0;
 static void __thiscall (*pw_console_cmd)(void *ui_manager, const wchar_t *msg) = (void *)0x54b440;
@@ -142,6 +146,7 @@ static unsigned char (*pw_xz_dir_to_byte)(float dirX, float dirZ) = (void *)0x41
 static bool __thiscall (*pw_translate3dpos2screen)(void *viewport, float v3d[3], float v2d[3]) = (void *)0x71b1c0;
 static void __thiscall (*pw_add_chat_message)(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion) = (void *)0x552ea0;
 static void (*pw_get_item_info)(unsigned char inv_id, unsigned char slot_id) = (void *)0x5a85b0;
+static unsigned __thiscall (*pw_game_tick)(struct game_data *game, unsigned tick_time) = (void *)0x430bd0;
 
 /*
  * alive_flag:
@@ -150,6 +155,8 @@ static void (*pw_get_item_info)(unsigned char inv_id, unsigned char slot_id) = (
  *   0 don't care
  */
 static struct object * __thiscall (*pw_get_object)(struct world_objects *world, int id, int alive_filter) = (void *)0x429510;
+
+static unsigned __thiscall (*pw_can_do)(struct player *host_player, int do_what) = (void *)0x45af10;
 /*
  * touch_type:
  *   1 melee

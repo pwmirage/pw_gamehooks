@@ -551,6 +551,19 @@ hooked_fseek(FILE *fp, int32_t off, int32_t mode)
 	return _fseeki64(fp, loff, mode);
 }
 
+static bool __thiscall
+hooked_pw_try_use_skill(struct player *host_player, int skill_id, unsigned is_combo,
+		unsigned target_id, int force_atk)
+{
+	unsigned ret = pw_try_use_skill(host_player, skill_id, is_combo, target_id, force_atk);
+
+	if (host_player->cur_skill) {
+		pw_use_skill(skill_id, force_atk, 1, &target_id);
+	}
+
+	return ret;
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -659,6 +672,8 @@ ThreadMain(LPVOID _unused)
 
 	/* always show the number of items to be crafted (even if you cant craft atm) */
 	patch_mem(0x4f0132, "\x66\x90", 2);
+
+	trampoline_fn((void **)&pw_try_use_skill, 6, hooked_pw_try_use_skill);
 
 	d3d_hook();
 
