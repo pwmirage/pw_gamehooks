@@ -31,6 +31,7 @@
 #include "common.h"
 #include "pw_api.h"
 #include "d3d.h"
+#include "game_config.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
 #include "cimgui.h"
@@ -132,9 +133,29 @@ try_show_target_hp(void)
 	igPopFont();
 }
 
+void
+d3d_init_settings(int why)
+{
+	bool show_hp = game_config_get("show_hp_bar", "0")[0] == '1';
+	bool show_mp = game_config_get("show_mp_bar", "0")[0] == '1';
+
+	*(bool *)0x927d97 = !!show_hp;
+	*(bool *)0x927d98 = !!show_mp;
+
+	if (why == D3D_INIT_SETTINGS_PLAYER_LOAD) {
+		return;
+	}
+
+	bool render_nofocus = game_config_get("render_nofocus", "0")[0] == '1';
+	patch_mem(0x42ba47, render_nofocus ? "\xc6\xc0\x01" : "\x0f\x95\xc0", 3);
+	g_use_borderless = game_config_get("borderless_fullscreen", "1")[0] == '1';
+}
+
 static void
 try_show_settings_win(void)
 {
+	bool check, changed = false;
+
 	if (!g_settings_show) {
 		return;
 	}
@@ -149,21 +170,36 @@ try_show_settings_win(void)
 	igSetNextWindowSize((ImVec2){270, 160}, ImGuiCond_Always);
 	igBegin("Extra Settings", &g_settings_show, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
 	igText("All changes are applied immediately");
-	bool freeze_win = *(uint8_t *)0x42ba47 == 0x0f;
-	if (igCheckbox("Freeze window on focus lost", &freeze_win)) {
-		patch_mem(0x42ba47, freeze_win ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+	check = *(uint8_t *)0x42ba47 == 0x0f;
+	if (igCheckbox("Freeze window on focus lost", &check)) {
+		game_config_set("render_nofocus", check ? "0" : "1");
+		changed = true;
+		patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
 	}
-	bool show_hp = !!*(uint8_t *)0x927d97;
-	if (igCheckbox("Show HP bars above entities", &show_hp)) {
-		*(bool *)0x927d97 = !!show_hp;
+	check = !!*(uint8_t *)0x927d97;
+	if (igCheckbox("Show HP bars above entities", &check)) {
+		game_config_set("show_hp_bar", check ? "1" : "0");
+		changed = true;
+		*(bool *)0x927d97 = !!check;
 	}
-	bool show_mp = !!*(uint8_t *)0x927d98;
-	if (igCheckbox("Show MP bars above entities", &show_mp)) {
-		*(bool *)0x927d98 = !!show_mp;
+	check = !!*(uint8_t *)0x927d98;
+	if (igCheckbox("Show MP bars above entities", &check)) {
+		game_config_set("show_mp_bar", check ? "1" : "0");
+		changed = true;
+		*(bool *)0x927d98 = !!check;
 	}
-	igCheckbox("Force borderless fullscreen", &g_use_borderless);
+	check = g_use_borderless;
+	if (igCheckbox("Force borderless fullscreen", &check)) {
+		game_config_set("borderless_fullscreen", check ? "1" : "0");
+		changed = true;
+		g_use_borderless = check;
+	}
 	igSameLine(0, -1); show_help_marker("Effective on next fullscreen change");
 	igEnd();
+
+	if (changed) {
+		game_config_save(false);
+	}
 }
 
 static DWORD __stdcall
@@ -193,7 +229,7 @@ try_show_update_win(void)
 
 	ImVec2 center;
 	ImGuiViewport_GetCenter(&center, igGetMainViewport());
-	igSetNextWindowPos(center, ImGuiCond_Appearing, (ImVec2){ 0.5f, 0.5f });
+	igSetNextWindowPos(center, ImGuiCond_Always, (ImVec2){ 0.5f, 0.5f });
 
 	if (igBeginPopupModal("MirageUpdate", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
 		igText("New PW Mirage client update is available.\nWould you like to download it now?");

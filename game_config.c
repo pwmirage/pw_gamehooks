@@ -141,7 +141,7 @@ save_cb(void *el, void *ctx1, void *ctx2)
 }
 
 void
-game_config_save(void)
+game_config_save(bool close)
 {
 	fseek(g_config.fp, 0, SEEK_SET);
 	fprintf(g_config.fp, "# PW Mirage Game settings\n");
@@ -153,6 +153,8 @@ game_config_save(void)
 
 	fflush(g_config.fp);
 	ftruncate(fileno(g_config.fp), ftell(g_config.fp));
-	fclose(g_config.fp);
-}
 
+	if (close) {
+		fclose(g_config.fp);
+	}
+}

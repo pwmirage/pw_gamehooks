@@ -120,6 +120,39 @@ save_fullscreen_opt(void *unk1, void *unk2, unsigned is_fullscreen)
 	return real_fn(unk1, unk2, g_fullscreen);
 }
 
+static wchar_t g_win_title[128];
+static bool g_reload_title;
+
+DWORD __stdcall
+reload_title_cb(void *arg)
+{
+	SetWindowTextW(g_window, g_win_title);
+}
+
+static bool __thiscall
+hooked_on_game_enter(struct game_data *game, int world_id, float player_pos[3])
+{
+	bool ret = pw_on_game_enter(game, world_id, player_pos);
+
+	pw_populate_console_log();
+
+	/* we don't have player info yet, so defer changing the title */
+	g_reload_title = true;
+	return ret;
+}
+
+static bool __fastcall
+hooked_on_game_leave(void)
+{
+	DWORD tid;
+
+	pw_on_game_leave();
+
+	snwprintf(g_win_title, sizeof(g_win_title) / sizeof(g_win_title[0]), L"PW Mirage");
+	/* the process hangs if we update the title from this thread... */
+	CreateThread(NULL, 0, reload_title_cb, NULL, 0, &tid);
+}
+
 static bool g_ignore_next_craft_change = false;
 
 /* button clicks / slider changes / etc */
@@ -267,7 +300,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		}
 		break;
 	case WM_KILLFOCUS:
-		{
+		if (g_fullscreen) {
 			POINT mouse_pos;
 			RECT win_pos;
 			int safe_margin = 5;
@@ -360,30 +393,26 @@ hooked_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int 
 	pw_add_chat_message(cecgamerun, str, channel, idPlayer, szName, byFlag, emotion);
 }
 
-static wchar_t g_win_title[128];
-
-DWORD __stdcall
-hooked_pw_load_configs_cb(void *arg)
-{
-	SetWindowTextW(g_window, g_win_title);
-}
-
 static unsigned __thiscall
 hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 {
+	unsigned ret = pw_load_configs(game, unk1, unk2);
 	DWORD tid;
 
-	unsigned ret = pw_load_configs(game, unk1, unk2);
-
-	pw_populate_console_log();
+	d3d_init_settings(D3D_INIT_SETTINGS_PLAYER_LOAD);
 
 	/* always enable ingame console (could have been disabled by the game at its init) */
 	patch_mem(0x927cc8, "\x01", 1);
 
-	wchar_t *player_name = *(wchar_t **)(((char *)game->player) + 0x5cc);
-	snwprintf(g_win_title, sizeof(g_win_title) / sizeof(g_win_title[0]), L"PW Mirage: %s", player_name);
-	/* the process hangs if we update the title from this thread... */
-	CreateThread(NULL, 0, hooked_pw_load_configs_cb, NULL, 0, &tid);
+	if (g_reload_title) {
+		g_reload_title = false;
+
+		wchar_t *player_name = *(wchar_t **)(((char *)game->player) + 0x5cc);
+		snwprintf(g_win_title, sizeof(g_win_title) / sizeof(g_win_title[0]), L"%s - PW Mirage", player_name);
+		/* the process hangs if we update the title from this thread... */
+		CreateThread(NULL, 0, reload_title_cb, NULL, 0, &tid);
+	}
+
 	return ret;
 }
 
@@ -551,19 +580,6 @@ hooked_fseek(FILE *fp, int32_t off, int32_t mode)
 	return _fseeki64(fp, loff, mode);
 }
 
-static bool __thiscall
-hooked_pw_try_use_skill(struct player *host_player, int skill_id, unsigned is_combo,
-		unsigned target_id, int force_atk)
-{
-	unsigned ret = pw_try_use_skill(host_player, skill_id, is_combo, target_id, force_atk);
-
-	if (host_player->cur_skill) {
-		pw_use_skill(skill_id, force_atk, 1, &target_id);
-	}
-
-	return ret;
-}
-
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -584,6 +600,8 @@ ThreadMain(LPVOID _unused)
 	}
 
 	set_pw_version();
+
+	d3d_init_settings(D3D_INIT_SETTINGS_INITIAL);
 
 	patch_mem_u32(0x85f454, (uintptr_t)hooked_fseek);
 
@@ -646,6 +664,8 @@ ThreadMain(LPVOID _unused)
 
 	trampoline_fn((void **)&pw_add_chat_message, 7, hooked_add_chat_message);
 	trampoline_fn((void **)&pw_console_cmd, 6, hooked_pw_console_cmd);
+	trampoline_fn((void **)&pw_on_game_enter, 7, hooked_on_game_enter);
+	trampoline_fn((void **)&pw_on_game_leave, 5, hooked_on_game_leave);
 
 	if (pw_wait_for_win() == 0) {
 		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
@@ -673,8 +693,6 @@ ThreadMain(LPVOID _unused)
 	/* always show the number of items to be crafted (even if you cant craft atm) */
 	patch_mem(0x4f0132, "\x66\x90", 2);
 
-	trampoline_fn((void **)&pw_try_use_skill, 6, hooked_pw_try_use_skill);
-
 	d3d_hook();
 
 	/* hook into PW input handling */
@@ -684,6 +702,8 @@ ThreadMain(LPVOID _unused)
 
 	/* process our custom windows input */
 	WaitForSingleObject(g_unload_event, (DWORD)INFINITY);
+
+	game_config_save(true);
 
 	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
 

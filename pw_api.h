@@ -173,6 +173,8 @@ static void * __thiscall (*pw_dialog_get_el)(struct ui_dialog *dialog, const cha
 static int * __thiscall (*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;
 static void __fastcall (*pw_item_add_ext_desc)(void *item) = (void *)0x48da10;
 static int * __thiscall (*pw_item_desc_add_wstr)(void *item, wchar_t *wstr) = (void *)0x6f78d0;
+static bool __thiscall (*pw_on_game_enter)(struct game_data *game, int world_id, float player_pos[3]) = (void *)0x42f950;
+static void __fastcall (*pw_on_game_leave)(void) = (void *)0x42fbb0;
 
 static void __thiscall (*pw_fashion_preview_set_item)(void *fashion_win, void *item, void *slot_el) = (void *)0x4c2d80;
 static void * (*pw_alloc_item)(uint32_t id, uint32_t expire_time, uint32_t count, uint32_t id_space) = (void *)0x48cd70;
