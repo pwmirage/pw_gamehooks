@@ -38,6 +38,8 @@
 #include "common.h"
 #include "d3d.h"
 #include "game_config.h"
+#include "avl.h"
+#include "pw_item_desc.h"
 
 extern bool g_use_borderless;
 
@@ -485,24 +487,17 @@ hooked_crash_handler(int unused_1, void *unused_2)
 static void __fastcall
 hooked_item_add_ext_desc(void *item)
 {
-	static unsigned char r, g, b;
-	static wchar_t wcolor[32] = L"^ffffff\r\rcolorful!!!\r\r";
-	const char *n2s = "0123456789abcdef";
-	static int cnt;
+	struct pw_item_desc_entry *entry;
+	uint32_t id = *(uint32_t *)(item + 8);
 
-	r += 1;
-	g += 2;
-	b += 3;
+	entry = pw_item_desc_get(id);
+	if (!entry) {
+		pw_item_add_ext_desc(item);
+		return;
+	}
 
-	wcolor[1] = n2s[r >> 4];
-	wcolor[2] = n2s[r & 0xf];
-	wcolor[3] = n2s[g >> 4];
-	wcolor[4] = n2s[g & 0xf];
-	wcolor[5] = n2s[b >> 4];
-	wcolor[6] = n2s[b & 0xf];
-
-	pw_item_desc_add_wstr(item + 0x44, wcolor);
-	pw_item_add_ext_desc(item);
+	pw_item_desc_add_wstr(item + 0x44, L"\r\n\r\n");
+	pw_item_desc_add_wstr(item + 0x44, entry->aux);
 }
 
 static HFONT WINAPI (*org_CreateFontIndirectExW)(ENUMLOGFONTEXDVW* lpelf);
@@ -521,6 +516,7 @@ hooked_translate3dpos2screen(void *viewport, float v3d[3], float v2d[3])
 	/* the position is usually converted to int and it often twitches by 1px.
 	 * adding 0.5 helps a ton even though it's not a perfect solution */
 	v2d[0] += 0.5;
+	v2d[2] += 0.5;
 	return ret;
 }
 
@@ -581,6 +577,17 @@ hooked_fseek(FILE *fp, int32_t off, int32_t mode)
 	return _fseeki64(fp, loff, mode);
 }
 
+static void
+item_desc_avl_wchar_fn(void *el, void *ctx1, void *ctx2)
+{
+	struct pw_avl_node *node = el;
+	struct pw_item_desc_entry *entry = (void *)node->data;
+
+	pw_log("item_desc_avl_wchar_fn: %u -> %s", entry->id, entry->desc);
+	entry->aux = malloc(entry->len * 2 + 2);
+	snwprintf((wchar_t *)entry->aux, entry->len + 1, L"%S", entry->desc);
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -594,6 +601,15 @@ ThreadMain(LPVOID _unused)
 		MessageBox(NULL, "Can't load the config file at ../patcher/game.cfg", "Error", MB_OK);
 		return 1;
 	}
+
+	rc = pw_item_desc_load("..\\patcher\\item_desc.data");
+	if (rc != 0) {
+		MessageBox(NULL, "Failed to load item description from patcher/item_desc.data",
+				"Error", MB_OK);
+		return 1;
+	}
+
+	pw_avl_foreach(g_pw_item_desc_avl, item_desc_avl_wchar_fn, NULL, NULL);
 
 	if (pw_find_pwi_game_data() == 0) {
 		MessageBox(NULL, "Failed to find PW process. Is the game running?", "Error", MB_OK);
@@ -686,7 +702,7 @@ ThreadMain(LPVOID _unused)
 	patch_jmp32(0x44cdb6, (uintptr_t)hooked_pw_get_info_on_acquire);
 
 	patch_jmp32(0x471f70, (uintptr_t)hooked_translate3dpos2screen);
-	//trampoline_fn((void **)&pw_item_add_ext_desc, 10, hooked_item_add_ext_desc);
+	trampoline_fn((void **)&pw_item_add_ext_desc, 10, hooked_item_add_ext_desc);
 
 	/* open fashion preview when a fashion crafting recipe is clicked */
 	patch_jmp32(0x4f0238, (uintptr_t)hooked_alloc_produced_item);
