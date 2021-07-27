@@ -162,40 +162,76 @@ try_show_settings_win(void)
 
 	ImGuiViewport* viewport = igGetMainViewport();
 	ImVec2 work_size = viewport->WorkSize;
-	ImVec2 window_pos, window_pos_pivot;
+	ImVec2 window_pos, window_pos_pivot, window_size;
 
 	window_pos.x = work_size.x - 5;
 	window_pos.y = work_size.y - 82;
 	igSetNextWindowPos(window_pos, ImGuiCond_FirstUseEver, (ImVec2){1, 1});
-	igSetNextWindowSize((ImVec2){270, 160}, ImGuiCond_Always);
-	igBegin("Extra Settings", &g_settings_show, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-	igText("All changes are applied immediately");
-	check = *(uint8_t *)0x42ba47 == 0x0f;
-	if (igCheckbox("Freeze window on focus lost", &check)) {
-		game_config_set("render_nofocus", check ? "0" : "1");
-		changed = true;
-		patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+
+	window_size.x = 270;
+	window_size.y = 225;
+	igSetNextWindowSize(window_size, ImGuiCond_Always);
+
+	igPushStyleVarVec2(ImGuiStyleVar_WindowPadding, (ImVec2){ 2, 2 });
+	igPushStyleColorVec4(ImGuiCol_Border, (ImVec4) { 0.70, 0.44, 0.39, 1.00 });
+	igBegin("Extra Settings", &g_settings_show, ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
+			ImGuiWindowFlags_NoScrollWithMouse);
+	igPopStyleColor(1);
+	igPopStyleVar(1);
+
+	{
+		igPushStyleVarFloat(ImGuiStyleVar_ChildRounding, 4.0f);
+		igPushStyleColorVec4(ImGuiCol_Border, (ImVec4){ 0.51, 0.54, 0.58, 1.00 });
+		igBeginChildStr("ChildR", (ImVec2){ 0, window_size.y - 4 }, true, ImGuiWindowFlags_None);
+		igPopStyleColor(1);
+		igPopStyleVar(1);
+
+		igAlignTextToFramePadding();
+		igText("Extra Settings");
+		igSameLine(window_size.x - 34, -1);
+		if (igButton("X", (ImVec2){ 22, 22 })) {
+			g_settings_show = false;
+		}
+
+		igSeparator();
+
+		igText("All changes are applied immediately");
+		check = *(uint8_t *)0x42ba47 == 0x0f;
+		if (igCheckbox("Freeze window on focus lost", &check)) {
+			game_config_set("render_nofocus", check ? "0" : "1");
+			changed = true;
+			patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+		}
+		check = !!*(uint8_t *)0x927d97;
+		if (igCheckbox("Show HP bars above entities", &check)) {
+			game_config_set("show_hp_bar", check ? "1" : "0");
+			changed = true;
+			*(bool *)0x927d97 = !!check;
+		}
+		check = !!*(uint8_t *)0x927d98;
+		if (igCheckbox("Show MP bars above entities", &check)) {
+			game_config_set("show_mp_bar", check ? "1" : "0");
+			changed = true;
+			*(bool *)0x927d98 = !!check;
+		}
+		check = g_use_borderless;
+		if (igCheckbox("Force borderless fullscreen", &check)) {
+			game_config_set("borderless_fullscreen", check ? "1" : "0");
+			changed = true;
+			g_use_borderless = check;
+		}
+
+		igSameLine(0, -1); show_help_marker("Effective on next fullscreen change");
+		if (igButton("Close", (ImVec2){ 80, 22 })) {
+			g_settings_show = false;
+		}
+
+		igEndChild();
 	}
-	check = !!*(uint8_t *)0x927d97;
-	if (igCheckbox("Show HP bars above entities", &check)) {
-		game_config_set("show_hp_bar", check ? "1" : "0");
-		changed = true;
-		*(bool *)0x927d97 = !!check;
-	}
-	check = !!*(uint8_t *)0x927d98;
-	if (igCheckbox("Show MP bars above entities", &check)) {
-		game_config_set("show_mp_bar", check ? "1" : "0");
-		changed = true;
-		*(bool *)0x927d98 = !!check;
-	}
-	check = g_use_borderless;
-	if (igCheckbox("Force borderless fullscreen", &check)) {
-		game_config_set("borderless_fullscreen", check ? "1" : "0");
-		changed = true;
-		g_use_borderless = check;
-	}
-	igSameLine(0, -1); show_help_marker("Effective on next fullscreen change");
+
 	igEnd();
+
 
 	if (changed) {
 		game_config_save(false);
@@ -248,6 +284,66 @@ try_show_update_win(void)
 	}
 }
 
+static void
+imgui_init(void)
+{
+	ImGuiIO *io = igGetIO();
+	//g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/fzxh1jw.ttf", 15, NULL, NULL);
+	g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
+	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
+
+	ImGuiStyle *style = igGetStyle();
+
+	style->WindowPadding = (ImVec2){ 8, 8 };
+	style->WindowRounding = 5.0f;
+	style->FramePadding = (ImVec2){ 4, 4 };
+	style->FrameRounding = 4.0f;
+	style->FrameBorderSize = 1.0f;
+	style->ItemSpacing = (ImVec2){ 12, 8 };
+	style->ItemInnerSpacing = (ImVec2){ 8, 6 };
+	style->IndentSpacing = 25.0f;
+	style->ScrollbarSize = 15.0f;
+	style->ScrollbarRounding = 9.0f;
+	style->GrabMinSize = 5.0f;
+	style->GrabRounding = 3.0f;
+
+	style->Colors[ImGuiCol_Text] = (ImVec4){ 0.80f, 0.80f, 0.83f, 1.00f };
+	style->Colors[ImGuiCol_TextDisabled] = (ImVec4){ 0.34f, 0.33f, 0.39f, 1.00f };
+	style->Colors[ImGuiCol_WindowBg] = (ImVec4){ 0.06f, 0.05f, 0.07f, 0.90f };
+	style->Colors[ImGuiCol_ChildBg] = (ImVec4){ 0.07f, 0.07f, 0.09f, 0.00f };
+	style->Colors[ImGuiCol_PopupBg] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
+	style->Colors[ImGuiCol_Border] = (ImVec4){ 0.70, 0.47, 0.39, 1.00 };
+	style->Colors[ImGuiCol_BorderShadow] = (ImVec4){ 0.92f, 0.91f, 0.88f, 0.00f };
+	style->Colors[ImGuiCol_FrameBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	style->Colors[ImGuiCol_FrameBgHovered] = (ImVec4){ 0.18, 0.18f, 0.18f, 1.00f };
+	style->Colors[ImGuiCol_FrameBgActive] = (ImVec4){ 0.24f, 0.23f, 0.29f, 1.00f };
+	style->Colors[ImGuiCol_TitleBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	style->Colors[ImGuiCol_TitleBgCollapsed] = (ImVec4){ 0.12f, 0.12f, 0.12f, 1.00f };
+	style->Colors[ImGuiCol_TitleBgActive] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
+	style->Colors[ImGuiCol_MenuBarBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	style->Colors[ImGuiCol_ScrollbarBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	style->Colors[ImGuiCol_ScrollbarGrab] = (ImVec4){ 0.80f, 0.80f, 0.83f, 0.31f };
+	style->Colors[ImGuiCol_ScrollbarGrabHovered] = (ImVec4){ 0.56f, 0.56f, 0.58f, 1.00f };
+	style->Colors[ImGuiCol_ScrollbarGrabActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
+	style->Colors[ImGuiCol_CheckMark] = (ImVec4){ 0.40f, 1.00f, 0.00f, 1.00f };
+	style->Colors[ImGuiCol_SliderGrab] = (ImVec4){ 0.80f, 0.80f, 0.83f, 0.31f };
+	style->Colors[ImGuiCol_SliderGrabActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
+	style->Colors[ImGuiCol_Button] = (ImVec4){ 0.26f, 0.17f, 0.18f, 1.00f };
+	style->Colors[ImGuiCol_ButtonHovered] = (ImVec4){ 0.33f, 0.15f, 0.13f, 1.00f };
+	style->Colors[ImGuiCol_ButtonActive] = (ImVec4){ 0.37f, 0.15f, 0.13f, 1.00f };
+	style->Colors[ImGuiCol_Header] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	style->Colors[ImGuiCol_HeaderHovered] = (ImVec4){ 0.56f, 0.56f, 0.58f, 1.00f };
+	style->Colors[ImGuiCol_HeaderActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
+	style->Colors[ImGuiCol_ResizeGrip] = (ImVec4){ 0.00f, 0.00f, 0.00f, 0.00f };
+	style->Colors[ImGuiCol_ResizeGripHovered] = (ImVec4){ 0.56f, 0.56f, 0.58f, 1.00f };
+	style->Colors[ImGuiCol_ResizeGripActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
+	style->Colors[ImGuiCol_PlotLines] = (ImVec4){ 0.40f, 0.39f, 0.38f, 0.63f };
+	style->Colors[ImGuiCol_PlotLinesHovered] = (ImVec4){ 0.25f, 1.00f, 0.00f, 1.00f };
+	style->Colors[ImGuiCol_PlotHistogram] = (ImVec4){ 0.40f, 0.39f, 0.38f, 0.63f };
+	style->Colors[ImGuiCol_PlotHistogramHovered] = (ImVec4){ 0.25f, 1.00f, 0.00f, 1.00f };
+	style->Colors[ImGuiCol_TextSelectedBg] = (ImVec4){ 0.25f, 1.00f, 0.00f, 0.43f };
+	style->Colors[ImGuiCol_ModalWindowDimBg] = (ImVec4){ 1.00f, 0.98f, 0.95f, 0.73f };
+}
 
 static HRESULT APIENTRY
 hooked_endScene(LPDIRECT3DDEVICE9 device)
@@ -263,10 +359,7 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 		ImGui_ImplWin32_Init(g_window);
 		ImGui_ImplDX9_Init(device);
 
-		ImGuiIO *io = igGetIO();
-		//g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/fzxh1jw.ttf", 15, NULL, NULL);
-		g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
-		g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
+		imgui_init();
 	}
 
 	ImGui_ImplDX9_NewFrame();

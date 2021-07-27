@@ -164,8 +164,8 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 
 	pw_log("ctrl: %s, win: %s\n", ctrl_name, parent_name);
 
-	if (strcmp(parent_name, "Win_Main3") == 0 && strcmp(ctrl_name, "wquickkey") == 0) {
-		g_settings_show = !g_settings_show;
+	if (strncmp(parent_name, "Win_Setting", strlen("Win_Setting")) == 0 && strcmp(ctrl_name, "customsetting") == 0) {
+		g_settings_show = true;
 		return 1;
 	}
 
@@ -316,6 +316,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 			}
 			break;
 		}
+		break;
 	case WM_SYSCOMMAND:
 		switch (data) {
 		case SC_MINIMIZE:
