@@ -496,6 +496,11 @@ hooked_item_add_ext_desc(void *item)
 		return;
 	}
 
+	if (*(wchar_t *)entry->aux == 0) {
+		/* desc is overwritten to nothing */
+		return;
+	}
+
 	pw_item_desc_add_wstr(item + 0x44, L"\r\n\r\n");
 	pw_item_desc_add_wstr(item + 0x44, entry->aux);
 }
@@ -516,7 +521,7 @@ hooked_translate3dpos2screen(void *viewport, float v3d[3], float v2d[3])
 	/* the position is usually converted to int and it often twitches by 1px.
 	 * adding 0.5 helps a ton even though it's not a perfect solution */
 	v2d[0] += 0.5;
-	v2d[2] += 0.5;
+	v2d[1] += 0.5;
 	return ret;
 }
 
@@ -582,10 +587,25 @@ item_desc_avl_wchar_fn(void *el, void *ctx1, void *ctx2)
 {
 	struct pw_avl_node *node = el;
 	struct pw_item_desc_entry *entry = (void *)node->data;
+	wchar_t *wstr;
+	size_t i, max_chars = entry->len * 1 + 16;
 
 	pw_log("item_desc_avl_wchar_fn: %u -> %s", entry->id, entry->desc);
-	entry->aux = malloc(entry->len * 2 + 2);
-	snwprintf((wchar_t *)entry->aux, entry->len + 1, L"%S", entry->desc);
+	wstr = entry->aux = malloc(max_chars * sizeof(wchar_t));
+	if (!wstr) {
+		assert(false);
+		return;
+	}
+
+	snwprintf((wchar_t *)entry->aux, max_chars + 1, L"%S", entry->desc);
+	while (*wstr) {
+		if (*wstr == '\\' && *(wstr + 1) == 'n') {
+			*wstr = '\r';
+			*(wstr + 1) = '\n';
+			*wstr++;
+		}
+		*wstr++;
+	}
 }
 
 static DWORD WINAPI
