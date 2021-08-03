@@ -39,3 +39,6 @@ void trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn);
 void trampoline_winapi_fn(void **orig_fn, void *fn);
 void u32_to_str(char *buf, uint32_t u32);
 void restore_mem(void);
+
+void setup_crash_handler(void);
+void handle_crash(void *winapi_exception_info);

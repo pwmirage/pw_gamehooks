@@ -13,6 +13,7 @@ struct game_config_opt {
 int game_config_parse(const char *filepath);
 const char *game_config_get(const char *key, const char *defval);
 struct game_config_opt *game_config_set(const char *key, const char *value);
+size_t game_config_dump(char *buf, size_t bufsize);
 void game_config_save(bool close);
 
 #endif /* PW_GAME_CONFIG_H */

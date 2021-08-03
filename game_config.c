@@ -134,10 +134,11 @@ game_config_set(const char *key, const char *value)
 void
 save_cb(void *el, void *ctx1, void *ctx2)
 {
+	FILE *fp = ctx1;
 	struct pw_avl_node *node = el;
 	struct game_config_opt *opt = (void *)node->data;
 
-	fprintf(g_config.fp, "%s = %s\n", opt->key, opt->val);
+	fprintf(fp, "%s = %s\n", opt->key, opt->val);
 }
 
 void
@@ -149,7 +150,7 @@ game_config_save(bool close)
 	fprintf(g_config.fp, "# All following and trailing spaces are trimmed\n");
 	fprintf(g_config.fp, "\n");
 
-	pw_avl_foreach(g_config.opts, save_cb, NULL, NULL);
+	pw_avl_foreach(g_config.opts, save_cb, g_config.fp, NULL);
 
 	fflush(g_config.fp);
 	ftruncate(fileno(g_config.fp), ftell(g_config.fp));
@@ -157,4 +158,26 @@ game_config_save(bool close)
 	if (close) {
 		fclose(g_config.fp);
 	}
+}
+
+void
+dump_cb(void *el, void *ctx1, void *ctx2)
+{
+	char **buf = ctx1;
+	size_t *buf_remaining = ctx2;
+
+	struct pw_avl_node *node = el;
+	struct game_config_opt *opt = (void *)node->data;
+
+	size_t bytes = snprintf(*buf, *buf_remaining, "    %s = %s\r\n", opt->key, opt->val);
+	*buf_remaining -= bytes;
+	*buf += bytes;
+}
+
+size_t
+game_config_dump(char *buf, size_t bufsize)
+{
+	char *buf_org = buf;
+	pw_avl_foreach(g_config.opts, dump_cb, &buf, &bufsize);
+	return buf - buf_org;
 }

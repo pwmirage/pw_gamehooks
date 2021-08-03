@@ -33,6 +33,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <wingdi.h>
+#include <imagehlp.h>
 
 #include "pw_api.h"
 #include "common.h"
@@ -45,6 +46,7 @@ extern bool g_use_borderless;
 
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
+bool g_replace_font = true;
 static wchar_t g_version[32];
 static wchar_t g_build[32];
 static HMODULE g_unload_event;
@@ -470,6 +472,7 @@ hooked_exit(void)
 {
 	g_unloading = true;
 	g_exiting = true;
+	g_replace_font = false;
 
 	/* our hacks sometimes crash on exit, not sure why. they're hacks, so just ignore the errors */
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -477,11 +480,16 @@ hooked_exit(void)
 	SetEvent(g_unload_event);
 }
 
-static void __stdcall
-hooked_crash_handler(int unused_1, void *unused_2)
+static void
+hooked_exception_handler(void)
 {
-	/* exit with a regular crash dialogue */
-	*(int *)0x0 = 1;
+	EXCEPTION_POINTERS *ExceptionInfo;
+
+	__asm__(
+		"mov %0, eax;"
+		: "=r"(ExceptionInfo));
+
+	handle_crash(ExceptionInfo);
 }
 
 static void __fastcall
@@ -508,6 +516,11 @@ hooked_item_add_ext_desc(void *item)
 static HFONT WINAPI (*org_CreateFontIndirectExW)(ENUMLOGFONTEXDVW* lpelf);
 static HFONT WINAPI hooked_CreateFontIndirectExW(ENUMLOGFONTEXDVW* lpelf)
 {
+	if (!g_replace_font) {
+		/* no need to replace font in MessageBoxes, etc... */
+		return org_CreateFontIndirectExW(lpelf);
+	}
+
 	LOGFONTW *lplf = &lpelf->elfEnumLogfontEx.elfLogFont;
 	wcscpy(lplf->lfFaceName, L"Microsoft Sans Serif");
 	return org_CreateFontIndirectExW(lpelf);
@@ -614,8 +627,9 @@ ThreadMain(LPVOID _unused)
 	MSG msg;
 	int rc;
 
-	/* find and init some game data */
+	setup_crash_handler();
 
+	/* find and init some game data */
 	rc = game_config_parse("..\\patcher\\game.cfg");
 	if (rc != 0) {
 		MessageBox(NULL, "Can't load the config file at ../patcher/game.cfg", "Error", MB_OK);
@@ -640,8 +654,6 @@ ThreadMain(LPVOID _unused)
 
 	d3d_init_settings(D3D_INIT_SETTINGS_INITIAL);
 
-	patch_mem_u32(0x85f454, (uintptr_t)hooked_fseek);
-
 	patch_mem(0x40bf43, "\x81\xc4\x0c\x00\x00\x00", 6);
 
 	patch_jmp32(0x40b257, (uintptr_t)read_fullscreen_opt);
@@ -651,6 +663,8 @@ ThreadMain(LPVOID _unused)
 	patch_jmp32(0x4faea2, (uintptr_t)setup_fullscreen_combo);
 	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
 
+	patch_mem_u32(0x85f454, (uintptr_t)hooked_fseek);
+
 	/* don't run pwprotector */
 	patch_mem(0x8cfb30, "_", 1);
 
@@ -658,7 +672,9 @@ ThreadMain(LPVOID _unused)
 
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
-	patch_jmp32(0x417a6d, (uintptr_t)hooked_crash_handler);
+
+	patch_mem(0x417aba, "\xe9", 1);
+	patch_jmp32(0x417aba, (uintptr_t)hooked_exception_handler);
 
 	HMODULE hGdiFull = GetModuleHandle("gdi32full.dll");
 	if (!hGdiFull) {
