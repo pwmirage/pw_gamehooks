@@ -33,7 +33,6 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <wingdi.h>
-#include <imagehlp.h>
 
 #include "pw_api.h"
 #include "common.h"
@@ -41,6 +40,7 @@
 #include "game_config.h"
 #include "avl.h"
 #include "pw_item_desc.h"
+#include "extlib.h"
 
 extern bool g_use_borderless;
 
@@ -149,6 +149,7 @@ static bool __fastcall
 hooked_on_game_leave(void)
 {
 	DWORD tid;
+
 
 	pw_on_game_leave();
 
@@ -480,6 +481,20 @@ hooked_exit(void)
 	SetEvent(g_unload_event);
 }
 
+static size_t
+append_crash_info_cb(char *buf, size_t bufsize, void *parent_hwnd, void *ctx)
+{
+	size_t buf_off = 0;
+
+	g_replace_font = false;
+	*(HWND *)parent_hwnd = g_window;
+
+	buf_off += snprintf(buf + buf_off, bufsize - buf_off, "\r\n\r\ngame.cfg:\r\n");
+	buf_off += game_config_dump(buf + buf_off, bufsize - buf_off);
+
+	return buf_off;
+}
+
 static void
 hooked_exception_handler(void)
 {
@@ -627,7 +642,7 @@ ThreadMain(LPVOID _unused)
 	MSG msg;
 	int rc;
 
-	setup_crash_handler();
+	setup_crash_handler(append_crash_info_cb, NULL);
 
 	/* find and init some game data */
 	rc = game_config_parse("..\\patcher\\game.cfg");

@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "game_config.h"
+#include "extlib.h"
 
 #define BUFFER_MAX (16*1024)
 
@@ -21,13 +21,6 @@
 #define BFD_ERR_BAD_FORMAT  (2)
 #define BFD_ERR_NO_SYMBOLS  (3)
 #define BFD_ERR_READ_SYMBOL (4)
-
-/* we don't need full libintl */
-char *
-libintl_dgettext(char *domain, char *mesgid)
-{
-	return NULL;
-}
 
 struct bfd_ctx {
 	bfd * handle;
@@ -313,7 +306,7 @@ snprint_stacktrace(char *buf, size_t bufsize, CONTEXT *context)
 	return buf_off;
 }
 
-extern HWND g_window;
+static HWND g_parent_window;
 static HINSTANCE g_instance;
 static const char *g_crash_log = NULL;
 
@@ -327,7 +320,7 @@ hwnd_set_font(HWND child, LPARAM font)
 static void
 init_gui(HWND hwnd, HINSTANCE hInst)
 {
-	HICON hIcon= (HICON)GetClassLong(g_window, GCL_HICON);
+	HICON hIcon= (HICON)GetClassLong(g_parent_window, GCL_HICON);
 	SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
 
 	HWND log = CreateWindow("Edit", g_crash_log,
@@ -388,6 +381,7 @@ init_win(const char *log)
 
 	size_t x, y, w, h;
 
+
 	w = rect.right - rect.left;
 	h = rect.bottom - rect.top;
 	x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
@@ -403,9 +397,10 @@ init_win(const char *log)
 	}
 }
 
-extern bool g_replace_font;
+static crash_handler_cb g_crash_cb;
+static void *g_crash_ctx;
 
-void
+APICALL void
 handle_crash(void *winapi_exception_info)
 {
 	EXCEPTION_POINTERS *ExceptionInfo = winapi_exception_info;
@@ -420,8 +415,6 @@ handle_crash(void *winapi_exception_info)
 	}
 	crashed = 1;
 
-	g_replace_font = false;
-
 	buf_off = snprintf(buf, sizeof(buf), "PW has crashed! Please send the following information to an admin.\r\n\r\n"
 			"%s (0x%x) at 0x%08x\r\n",
 			except_code_to_str(ExceptionInfo->ExceptionRecord->ExceptionCode),
@@ -431,8 +424,9 @@ handle_crash(void *winapi_exception_info)
 		buf_off += snprint_stacktrace(buf + buf_off, sizeof(buf) - buf_off, ExceptionInfo->ContextRecord);
 	}
 
-	buf_off += snprintf(buf + buf_off, sizeof(buf) - buf_off, "\r\n\r\ngame.cfg:\r\n");
-	buf_off += game_config_dump(buf + buf_off, sizeof(buf) - buf_off);
+	if (g_crash_cb) {
+		buf_off += g_crash_cb(buf + buf_off, sizeof(buf) - buf_off, &g_parent_window, g_crash_ctx);
+	}
 
 	init_win(buf);
 
@@ -448,10 +442,12 @@ winapi_crash_handler(EXCEPTION_POINTERS *ExceptionInfo)
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
-void
-setup_crash_handler(void)
+APICALL void
+setup_crash_handler(crash_handler_cb cb, void *ctx)
 {
 	g_instance = (HINSTANCE)GetModuleHandle(NULL);
+	g_crash_cb = cb;
+	g_crash_ctx = ctx;
 
 	SetUnhandledExceptionFilter(winapi_crash_handler);
 }

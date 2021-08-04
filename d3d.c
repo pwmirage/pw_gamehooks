@@ -36,9 +36,6 @@
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
 #include "cimgui.h"
 
-int __cxa_guard_acquire(void *arg) { };
-void __cxa_guard_release(void *arg) { };
-
 static HRESULT (__stdcall *endScene_org)(LPDIRECT3DDEVICE9 pDevice);
 static HRESULT (__stdcall *Reset_org)(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
 static LPDIRECT3DDEVICE9 g_device = NULL;

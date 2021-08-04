@@ -1,7 +1,7 @@
 /*-
  * The MIT License
  *
- * Copyright 2020 Darek Stojaczyk
+ * Copyright 2019 Darek Stojaczyk
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,20 +22,30 @@
  * THE SOFTWARE.
  */
 
-#include <stdint.h>
+#define PACKAGE "libgamehook.dll"
+#define PACKAGE_VERSION "1.0"
+
+#include <stddef.h>
+#include <unistd.h>
+#include <windows.h>
 #include <inttypes.h>
+#include <stdint.h>
 #include <stdbool.h>
+#include <d3d9.h>
+#include <imagehlp.h>
+#include <bfd.h>
 
-extern bool g_exiting;
-extern bool g_unloading;
+#include "extlib.h"
 
-void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
-void patch_mem_u32(uintptr_t addr, uint32_t u32);
-void patch_mem_u16(uintptr_t addr, uint16_t u16);
-void patch_jmp32(uintptr_t addr, uintptr_t fn);
-void trampoline_call(uintptr_t addr, unsigned replaced_bytes, void *fn);
-void *trampoline_buf(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigned num_bytes);
-void trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn);
-void trampoline_winapi_fn(void **orig_fn, void *fn);
-void u32_to_str(char *buf, uint32_t u32);
-void restore_mem(void);
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
+#include "cimgui.h"
+
+/* we don't need full libintl */
+char * libintl_dgettext(char *domain, char *mesgid) { return NULL; };
+
+/* linux-only stuff */
+pid_t fork(void) { return 0; };
+
+/* c++ stuff */
+int __cxa_guard_acquire(void *arg) { return 0; };
+void __cxa_guard_release(void *arg) { };
