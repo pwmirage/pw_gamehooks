@@ -239,6 +239,7 @@ static size_t
 snprint_stacktrace(char *buf, size_t bufsize, CONTEXT *context)
 {
 	HANDLE process = GetCurrentProcess();
+	HANDLE thread = GetCurrentThread();
 	char symbolBuffer[sizeof(IMAGEHLP_SYMBOL) + 255] = {};
 	IMAGEHLP_SYMBOL *symbol = (IMAGEHLP_SYMBOL*) symbolBuffer;
 	char module_name_raw[MAX_PATH];
@@ -265,10 +266,11 @@ snprint_stacktrace(char *buf, size_t bufsize, CONTEXT *context)
 	frame.AddrFrame.Mode        = AddrModeFlat;
 
 	while (StackWalk(IMAGE_FILE_MACHINE_I386, process,
-				process, &frame,
+				thread, &frame,
 				context, 0, SymFunctionTableAccess,
 				SymGetModuleBase, 0)) {
-		DWORD module_base = SymGetModuleBase(process, frame.AddrPC.Offset);
+		uintptr_t addr = (uintptr_t)frame.AddrPC.Offset;
+		DWORD module_base = SymGetModuleBase(process, addr);
 		struct bfd_ctx *bc = NULL;
 		const char *module_name = "[unknown module]";
 		const char *symbol_name = "?";
@@ -282,21 +284,21 @@ snprint_stacktrace(char *buf, size_t bufsize, CONTEXT *context)
 			}
 		}
 
-		if (SymGetSymFromAddr(process, frame.AddrPC.Offset,
+		if (SymGetSymFromAddr(process, addr,
 					(DWORD*)&displacement, symbol)) {
 			symbol_name = symbol->Name;
 		}
 
-		struct find_info data = find(bc, frame.AddrPC.Offset);
+		struct find_info data = find(bc, addr);
 		if (data.func) {
 			buf_off += snprintf(buf + buf_off, bufsize - buf_off,
 					"    [%d] 0x%08x => %s %s:%u %s\r\n", depth++,
-					frame.AddrPC.Offset, module_name,
+					addr, module_name,
 					get_basename(data.file), data.line, data.func);
 		} else {
 			buf_off += snprintf(buf + buf_off, bufsize - buf_off,
 					"    [%d] 0x%08x => %s %s\r\n", depth++,
-					frame.AddrPC.Offset, module_name, symbol_name);
+					addr, module_name, symbol_name);
 		}
 	}
 
