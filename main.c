@@ -150,7 +150,6 @@ hooked_on_game_leave(void)
 {
 	DWORD tid;
 
-
 	pw_on_game_leave();
 
 	snwprintf(g_win_title, sizeof(g_win_title) / sizeof(g_win_title[0]), L"PW Mirage");
@@ -636,6 +635,65 @@ item_desc_avl_wchar_fn(void *el, void *ctx1, void *ctx2)
 	}
 }
 
+static int g_pending_skill_id;
+static unsigned char g_skill_pvp_mask;
+static int g_skill_target_id;
+static unsigned g_skill_stop_rel_time;
+static unsigned g_rel_time;
+
+static void
+use_skill_hooked(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids)
+{
+	g_skill_stop_rel_time = 0;
+	g_skill_pvp_mask = pvp_mask;
+	g_pending_skill_id = 0;
+	pw_use_skill(skill_id, pvp_mask, num_targets, target_ids);
+}
+
+static void
+hooked_try_cast_skill(void)
+{
+	__asm__ volatile(
+		"mov %0, ebx;"
+		"mov %1, dword ptr [esp + 0x8];"
+		: "=r"(g_skill_target_id), "=r"(g_pending_skill_id));
+
+	if (g_skill_stop_rel_time > g_rel_time - 1500) {
+		g_skill_stop_rel_time = 0;
+		pw_use_skill(g_pending_skill_id, g_skill_pvp_mask, 1, &g_skill_target_id);
+	}
+}
+
+static void
+hooked_on_skill_end(void)
+{
+	int skill_id;
+	struct player *player;
+
+	__asm__(
+		"mov %0, edx;"
+		"mov %1, esi;"
+		: "=r"(skill_id), "=r"(player));
+
+
+	if (player != g_pw_data->game->player) {
+		return;
+	}
+
+	g_skill_stop_rel_time = g_rel_time;
+
+	if (g_pending_skill_id) {
+		pw_use_skill(g_pending_skill_id, g_skill_pvp_mask, 1, &g_skill_target_id);
+	}
+}
+
+static unsigned __thiscall
+hooked_pw_game_tick(struct game_data *game, unsigned tick_time)
+{
+	g_rel_time += tick_time;
+	return pw_game_tick(game, tick_time);
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -757,6 +815,16 @@ ThreadMain(LPVOID _unused)
 
 	/* open fashion preview when a fashion crafting recipe is clicked */
 	patch_jmp32(0x4f0238, (uintptr_t)hooked_alloc_produced_item);
+
+	/* send next skill sending packets while the current one is still going.
+	 * This reduces the lag a bit */
+	trampoline_call(0x46e7a6, 6, hooked_on_skill_end);
+	trampoline_call(0x455ce1, 6, hooked_try_cast_skill);
+	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
+	trampoline_fn((void **)&pw_game_tick, 5, hooked_pw_game_tick);
+
+	/* silence "Invalid skill" error message when too many packets are sent */
+	patch_mem(0x585afa, "\xeb\x12", 2);
 
 	/* always show the number of items to be crafted (even if you cant craft atm) */
 	patch_mem(0x4f0132, "\x66\x90", 2);

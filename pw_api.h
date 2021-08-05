@@ -137,6 +137,7 @@ static void (*pw_move)(float *cur_pos, float *cur_pos_unused, int time, float sp
 static void (*pw_stop_move)(float *dest_pos, float speed, int move_mode, unsigned dir, short timestamp, int time) = (void *)0x5a8000;
 static void (*pw_use_skill)(int skill_id, unsigned char pvp_mask, int num_targets, int *target_ids) = (void *)0x5a8a20;
 static bool __thiscall (*pw_try_use_skill)(struct player *host_player, int skill_id, unsigned is_combo, unsigned target_id, int force_atk) = (void *)0x4559d0;
+static int __thiscall (*pw_do_cast_skill)(struct player *host_player, int skill_id, int force_atk) = (void *)0x45a3a0;
 static void * __thiscall (*pw_get_skill_by_id)(struct player *host_player, int id, bool unk) = (void *)(0x459e50);
 static void (*pw_normal_attack)(unsigned char pvp_mask) = (void *)0x5a80c0;
 static void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color) = (void *)0x553cc0;
@@ -147,6 +148,8 @@ static bool __thiscall (*pw_translate3dpos2screen)(void *viewport, float v3d[3],
 static void __thiscall (*pw_add_chat_message)(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion) = (void *)0x552ea0;
 static void (*pw_get_item_info)(unsigned char inv_id, unsigned char slot_id) = (void *)0x5a85b0;
 static unsigned __thiscall (*pw_game_tick)(struct game_data *game, unsigned tick_time) = (void *)0x430bd0;
+static int __cdecl (*pw_get_skill_execute_time)(int skill_id, int unk) = (void *)0x4c77a8;
+static bool __thiscall (*pw_is_casting_skill)(void) = (void *)0x458ec0;
 
 /*
  * alive_flag:
