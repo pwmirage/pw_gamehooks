@@ -30,3 +30,4 @@ daemon: daemon.c
 	gcc $(CFLAGS) -o build/gamedaemon.exe $^ -lws2_32
 
 -include $(OBJECTS:%.o=build/%.d)
+-include $(LIB_OBJECTS:%.o=build/%.d)

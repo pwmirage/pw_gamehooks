@@ -401,6 +401,7 @@ init_win(const char *log)
 
 static crash_handler_cb g_crash_cb;
 static void *g_crash_ctx;
+static bool g_enabled;
 
 APICALL void
 handle_crash(void *winapi_exception_info)
@@ -440,7 +441,9 @@ handle_crash(void *winapi_exception_info)
 static LONG WINAPI
 winapi_crash_handler(EXCEPTION_POINTERS *ExceptionInfo)
 {
-	handle_crash(ExceptionInfo);
+	if (g_enabled) {
+		handle_crash(ExceptionInfo);
+	}
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -450,6 +453,12 @@ setup_crash_handler(crash_handler_cb cb, void *ctx)
 	g_instance = (HINSTANCE)GetModuleHandle(NULL);
 	g_crash_cb = cb;
 	g_crash_ctx = ctx;
+	g_enabled = true;
 
 	SetUnhandledExceptionFilter(winapi_crash_handler);
+}
+
+APICALL void remove_crash_handler(void)
+{
+	g_enabled = false;
 }

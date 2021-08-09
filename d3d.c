@@ -246,7 +246,9 @@ update_cb(void *arg)
 	SetCurrentDirectory("..");
 	char buf[] = "pwmirage.exe --quickupdate";
 	CreateProcess(NULL, buf, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+
 	/* ExitProcess doesn't work, so... */
+	remove_crash_handler();
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 	*(uint32_t *)0x0 = 42;
 	return 0;
