@@ -818,13 +818,13 @@ ThreadMain(LPVOID _unused)
 
 	/* send next skill sending packets while the current one is still going.
 	 * This reduces the lag a bit */
-	trampoline_call(0x46e7a6, 6, hooked_on_skill_end);
-	trampoline_call(0x455ce1, 6, hooked_try_cast_skill);
-	trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
-	trampoline_fn((void **)&pw_game_tick, 5, hooked_pw_game_tick);
+	//trampoline_call(0x46e7a6, 6, hooked_on_skill_end);
+	//trampoline_call(0x455ce1, 6, hooked_try_cast_skill);
+	//trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
+	//trampoline_fn((void **)&pw_game_tick, 5, hooked_pw_game_tick);
 
 	/* silence "Invalid skill" error message when too many packets are sent */
-	patch_mem(0x585afa, "\xeb\x12", 2);
+	//patch_mem(0x585afa, "\xeb\x12", 2);
 
 	/* always show the number of items to be crafted (even if you cant craft atm) */
 	patch_mem(0x4f0132, "\x66\x90", 2);
