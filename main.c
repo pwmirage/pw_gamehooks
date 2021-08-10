@@ -43,6 +43,7 @@
 #include "extlib.h"
 
 extern bool g_use_borderless;
+extern unsigned g_target_dialog_pos_y;
 
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
@@ -67,6 +68,7 @@ set_borderless_fullscreen(bool is_fullscreen)
 	}
 
 	g_fullscreen = is_fullscreen;
+	g_target_dialog_pos_y = 0;
 	if (is_fullscreen) {
 		int fw, fh;
 
@@ -853,8 +855,9 @@ ThreadMain(LPVOID _unused)
 
 	g_unloading = true;
 
-	d3d_unhook();
 	restore_mem();
+	d3d_unhook();
+
 	g_tid_finished = true;
 	return 0;
 }

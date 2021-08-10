@@ -32,6 +32,7 @@
 #include "pw_api.h"
 #include "d3d.h"
 #include "game_config.h"
+#include "extlib.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
 #include "cimgui.h"
@@ -124,7 +125,7 @@ try_show_target_hp(void)
 	window_pos.y -= 1;
 	igSetNextWindowPos(window_pos, ImGuiCond_Always, (ImVec2){0, 0});
 	igBegin("target_hp2", &show, window_flags);
-	igText(buf);
+	igTextColored((ImVec4){ 0xff, 0xff, 0xff, 0xff }, buf);
 	igEnd();
 
 	igPopFont();
@@ -287,7 +288,6 @@ static void
 imgui_init(void)
 {
 	ImGuiIO *io = igGetIO();
-	//g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/fzxh1jw.ttf", 15, NULL, NULL);
 	g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
 	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
 
@@ -344,13 +344,21 @@ imgui_init(void)
 	style->Colors[ImGuiCol_ModalWindowDimBg] = (ImVec4){ 1.00f, 0.98f, 0.95f, 0.73f };
 }
 
-static HRESULT APIENTRY
-hooked_endScene(LPDIRECT3DDEVICE9 device)
+
+static unsigned __stdcall
+hooked_a3d_end_scene(unsigned unk)
 {
+	unsigned __stdcall (*real_end_scene)(unsigned unk);
+
+	__asm__(
+		"mov %0, dword ptr [eax + 0x8c];"
+		: "=r"(real_end_scene));
+
 	if (g_unloading) {
-		return endScene_org(device);
+		return real_end_scene(unk);
 	}
 
+	PDIRECT3DDEVICE9 device = *(void **)(unk + 0xc);
 	if (!g_device) {
 		g_device = device;
 		igCreateContext(NULL);
@@ -377,21 +385,27 @@ hooked_endScene(LPDIRECT3DDEVICE9 device)
 	igRender();
 	ImGui_ImplDX9_RenderDrawData(igGetDrawData());
 
-	return endScene_org(device);
+	return real_end_scene(unk);
 }
 
-static HRESULT APIENTRY
-hooked_Reset(LPDIRECT3DDEVICE9 device, D3DPRESENT_PARAMETERS* d3dpp)
+static unsigned __stdcall
+hooked_a3d_device_reset(void)
 {
-	HRESULT ret;
+	unsigned unk1, unk2;
+	unsigned __stdcall (*real_device_reset)(unsigned unk1, unsigned unk2);
+	unsigned ret;
 
-	if (g_unloading) {
-		return Reset_org(device, d3dpp);
-	}
+	__asm__(
+		"mov %0, eax;"
+		"mov %1, ecx;"
+		"mov %2, dword ptr [edx + 0x38];"
+		: "=r"(unk1), "=r"(unk2), "=r"(real_device_reset));
 
 	ImGui_ImplDX9_InvalidateDeviceObjects();
-	ret = Reset_org(device, d3dpp);
-	ImGui_ImplDX9_CreateDeviceObjects();
+	ret = real_device_reset(unk1, unk2);
+	if (!g_unloading) {
+		ImGui_ImplDX9_CreateDeviceObjects();
+	}
 
 	g_target_dialog_pos_y = 0;
 	return ret;
@@ -400,44 +414,16 @@ hooked_Reset(LPDIRECT3DDEVICE9 device, D3DPRESENT_PARAMETERS* d3dpp)
 int
 d3d_hook()
 {
-	IDirect3D9* d3d;
-	LPDIRECT3DDEVICE9 dummy_dev = NULL;
-	D3DPRESENT_PARAMETERS d3dpp = {};
-	HRESULT rc;
-
-	d3d = Direct3DCreate9(D3D_SDK_VERSION);
-	if (!d3d) {
-		return rc;
+	if (game_config_get("d3d8", "0")[0] == '1') {
+		/* we can't hook into d3d8 */
+		return S_OK;
 	}
 
-	d3dpp.Windowed = false;
-	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	d3dpp.hDeviceWindow = g_window;
+	patch_mem(0x70b1fb, "\xe8\x00\x00\x00\x00\x90", 6);
+	patch_jmp32(0x70b1fb, (uintptr_t)hooked_a3d_end_scene);
 
-	rc = IDirect3D9_CreateDevice(d3d, D3DADAPTER_DEFAULT,
-			D3DDEVTYPE_HAL, d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING,
-			&d3dpp, &dummy_dev);
-	if (rc != S_OK) {
-		// retry in window mode
-		d3dpp.Windowed = true;
-
-		rc = IDirect3D9_CreateDevice(d3d, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
-				d3dpp.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING,
-				&d3dpp, &dummy_dev);
-		if (rc != S_OK) {
-			IDirect3D9_Release(d3d);
-			return rc;
-		}
-	}
-
-	endScene_org = (void *)dummy_dev->lpVtbl->EndScene;
-	Reset_org = (void *)dummy_dev->lpVtbl->Reset;
-
-	dummy_dev->lpVtbl->Release(dummy_dev);
-	IDirect3D9_Release(d3d);
-
-	trampoline_fn((void **)&endScene_org, 7, hooked_endScene);
-	trampoline_fn((void **)&Reset_org, 5, hooked_Reset);
+	patch_mem(0x70c55f, "\xe8\x00\x00\x00\x00", 5);
+	patch_jmp32(0x70c55f, (uintptr_t)hooked_a3d_device_reset);
 
 	return S_OK;
 }
@@ -445,6 +431,12 @@ d3d_hook()
 void
 d3d_unhook(void)
 {
+	if (game_config_get("d3d8", "0")[0] == '1') {
+		/* we can't hook into d3d8 */
+		return;
+	}
+
+	ImGui_ImplDX9_Shutdown();
 }
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
