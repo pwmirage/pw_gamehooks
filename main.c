@@ -508,25 +508,54 @@ hooked_exception_handler(void)
 	handle_crash(ExceptionInfo);
 }
 
+static wchar_t *g_proc_type_name[] = {
+	L"Doesn't drop on death",
+	L"Unable to drop",
+	L"Unable to sell",
+	NULL,
+	L"Unable to trade",
+	NULL,
+	L"Bound on equip",
+	L"Unable to destroy",
+	L"Disappears on map change",
+	NULL,
+	L"Disappears on death",
+	NULL,
+	L"Unrepairable"
+};
+
 static void __fastcall
 hooked_item_add_ext_desc(void *item)
 {
 	struct pw_item_desc_entry *entry;
 	uint32_t id = *(uint32_t *)(item + 8);
+	uint32_t proc_type = *(uint32_t *)(item + 16);
+	bool sep_printed = false;
 
 	entry = pw_item_desc_get(id);
-	if (!entry) {
+	if (entry && *(wchar_t *)entry->aux != 0) {
+		if (!sep_printed) {
+			pw_item_desc_add_wstr(item + 0x44, L"\r\r");
+			//sep_printed = true;
+		}
+		pw_item_desc_add_wstr(item + 0x44, entry->aux);
+	} else if (!entry) {
 		pw_item_add_ext_desc(item);
-		return;
 	}
 
-	if (*(wchar_t *)entry->aux == 0) {
-		/* desc is overwritten to nothing */
-		return;
+	if (proc_type) {
+		for (int i = 0; i < sizeof(g_proc_type_name) / sizeof(g_proc_type_name[0]); i++) {
+			if (!(proc_type & (1 << i)) || !g_proc_type_name[i]) {
+				continue;
+			}
+			if (!sep_printed) {
+				pw_item_desc_add_wstr(item + 0x44, L"\r");
+				sep_printed = true;
+			}
+			pw_item_desc_add_wstr(item + 0x44, L"\r^00ffff");
+			pw_item_desc_add_wstr(item + 0x44, g_proc_type_name[i]);
+		}
 	}
-
-	pw_item_desc_add_wstr(item + 0x44, L"\r\n\r\n");
-	pw_item_desc_add_wstr(item + 0x44, entry->aux);
 }
 
 static HFONT WINAPI (*org_CreateFontIndirectExW)(ENUMLOGFONTEXDVW* lpelf);
@@ -696,6 +725,33 @@ hooked_pw_game_tick(struct game_data *game, unsigned tick_time)
 	return pw_game_tick(game, tick_time);
 }
 
+static unsigned __stdcall
+hooked_fixup_item_merging(void *frame)
+{
+	int cmd_last_slot, cmd_slot_amount, last_slot, slot_amount;
+	unsigned ok;
+
+	__asm__(
+		"mov eax, %4;"
+		"push dword ptr [eax + 0x24];"
+		"push dword ptr [eax + 0x20];"
+		"push dword ptr [eax + 0x14];"
+		"mov %0, edi;"
+		"pop %1;"
+		"pop %2;"
+		"pop %3;"
+		: "=r"(cmd_slot_amount), "=r"(cmd_last_slot), "=r"(last_slot), "=r"(slot_amount)
+		: "r"(frame));
+
+	ok = cmd_slot_amount == slot_amount && cmd_last_slot == last_slot;
+	if (!ok) {
+		pw_log("re-syncing inv state");
+		void (*refresh_inv_fn)(char inv_id) = (void *)0x5a85f0;
+		refresh_inv_fn(0);
+	}
+	return last_slot;
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -786,6 +842,11 @@ ThreadMain(LPVOID _unused)
 	/* increase the upper limit on other player's move time from 1s to 2s, helps on lag spikes */
 	patch_mem(0x442cc8, "\xd0\x07", 2);
 	patch_mem(0x442ccf, "\xd0\x07", 2);
+
+	/* sync items with the server when de-sync is detected */
+	patch_mem(0x44cd87, "\x54\x90", 2);
+	patch_mem(0x44cd89, "\xe8\x00\x00\x00\x00\x89\xc5\xeb\x07", 9);
+	patch_jmp32(0x44cd89, (uintptr_t)hooked_fixup_item_merging);
 
 	/* force screenshots via direct3d, not angellica engine */
 	patch_mem(0x433e35, "\xeb", 1);
