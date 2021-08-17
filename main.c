@@ -847,6 +847,12 @@ ThreadMain(LPVOID _unused)
 	patch_mem(0x44cd87, "\x54\x90", 2);
 	patch_mem(0x44cd89, "\xe8\x00\x00\x00\x00\x89\xc5\xeb\x07", 9);
 	patch_jmp32(0x44cd89, (uintptr_t)hooked_fixup_item_merging);
+	/* don't show "Equipping will bind" window */
+	patch_mem(0x4d8b87, "\x00", 1);
+	patch_mem(0x4bc0bf, "\x00", 1);
+	/* show Bound only on unable-to-trade items */
+	patch_mem(0x492020, "\x10", 1);
+	patch_mem(0x49205d, "\x00", 1);
 
 	/* force screenshots via direct3d, not angellica engine */
 	patch_mem(0x433e35, "\xeb", 1);
