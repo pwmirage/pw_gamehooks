@@ -853,6 +853,13 @@ ThreadMain(LPVOID _unused)
 	/* show Bound only on unable-to-trade items */
 	patch_mem(0x492020, "\x10", 1);
 	patch_mem(0x49205d, "\x00", 1);
+	/* don't show Bound on "Doesn't drop on death" items */
+	patch_mem(0x48affe, "\x10", 1);
+	patch_mem(0x48b039, "\x00", 1);
+	/* ^ */
+	patch_mem(0x48aace, "\x10", 1);
+	patch_mem(0x48ab09, "\x00", 1);
+
 
 	/* force screenshots via direct3d, not angellica engine */
 	patch_mem(0x433e35, "\xeb", 1);
