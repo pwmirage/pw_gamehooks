@@ -944,6 +944,10 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 	switch (reason) {
 	case DLL_PROCESS_ATTACH: {
 		DisableThreadLibraryCalls(mod);
+
+		/* don't load gamehook.dll anymore */
+		patch_mem(0x43abd9, "\x83\xc4\x04\x83\xc8\xff", 6);
+
 		CreateThread(NULL, 0, ThreadMain, NULL, 0, &g_tid);
 		return TRUE;
 	}
