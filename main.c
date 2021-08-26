@@ -859,6 +859,8 @@ ThreadMain(LPVOID _unused)
 	/* ^ */
 	patch_mem(0x48aace, "\x10", 1);
 	patch_mem(0x48ab09, "\x00", 1);
+	/* ^ for equipping items from action bar */
+	patch_mem(0x492de9, "\x00", 1);
 
 
 	/* force screenshots via direct3d, not angellica engine */
