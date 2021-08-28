@@ -752,6 +752,26 @@ hooked_fixup_item_merging(void *frame)
 	return last_slot;
 }
 
+static void * __thiscall
+hooked_get_recipe_to_display(void *this, int unk1, char unk2)
+{
+	static void * __thiscall
+		(*real_get_recipe_to_display)(void *this, int unk1, char unk2) = (void *)0x481200;
+
+	void *recipe = real_get_recipe_to_display(this, unk1, unk2);
+	if (!recipe) {
+		return NULL;
+	}
+
+	void *recipe_essence = *(void **)(recipe + 0x54);
+	uint32_t tgt_id = *(uint32_t *)(recipe_essence + 0x5c);
+	if (!tgt_id) {
+		return NULL;
+	}
+
+	return recipe;
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -906,6 +926,8 @@ ThreadMain(LPVOID _unused)
 
 	/* always show the number of items to be crafted (even if you cant craft atm) */
 	patch_mem(0x4f0132, "\x66\x90", 2);
+	/* don't show invalid recipes (tgt item id = 0) */
+	patch_jmp32(0x4ef565, (uintptr_t)hooked_get_recipe_to_display);
 
 	d3d_hook();
 
