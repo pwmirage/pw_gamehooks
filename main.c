@@ -929,6 +929,9 @@ ThreadMain(LPVOID _unused)
 	/* don't show invalid recipes (tgt item id = 0) */
 	patch_jmp32(0x4ef565, (uintptr_t)hooked_get_recipe_to_display);
 
+	/* show bank slots >= 100 (3 digits) */
+	patch_mem(0x8db72f, "3", 1);
+
 	d3d_hook();
 
 	/* hook into PW input handling */
