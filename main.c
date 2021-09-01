@@ -136,7 +136,7 @@ reload_title_cb(void *arg)
 }
 
 static bool __thiscall
-hooked_on_game_enter(struct game_data *game, int world_id, float player_pos[3])
+hooked_on_game_enter(struct game_data *game, int world_id, float *player_pos)
 {
 	bool ret = pw_on_game_enter(game, world_id, player_pos);
 
