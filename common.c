@@ -176,8 +176,6 @@ trampoline_call(uintptr_t addr, unsigned replaced_bytes, void *fn)
 		return;
 	}
 
-	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READWRITE, NULL);
-
 	/* prepare the code to jump to */
 	code[0] = 0x60; /* pushad */
 	code[1] = 0x9c; /* pushfd */
@@ -189,6 +187,8 @@ trampoline_call(uintptr_t addr, unsigned replaced_bytes, void *fn)
 	code[9 + replaced_bytes] = 0xe9; /* jmp */
 	u32_to_str(code + 10 + replaced_bytes, /* jump back rel addr */
 			addr + replaced_bytes - ((uintptr_t)code + 9 + replaced_bytes) - 5);
+
+	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READ, NULL);
 
 	/* jump to new code */
 	buf[0] = 0xe9;
@@ -210,8 +210,6 @@ trampoline_buf(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigne
 		return NULL;
 	}
 
-	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READWRITE, NULL);
-
 	/* prepare the code to jump to */
 	code[0] = 0x60; /* pushad */
 	code[1] = 0x9c; /* pushfd */
@@ -222,6 +220,8 @@ trampoline_buf(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigne
 	code[4 + num_bytes + replaced_bytes] = 0xe9; /* jmp */
 	u32_to_str(code + 5 + num_bytes + replaced_bytes, /* jump back rel addr */
 			addr + replaced_bytes - ((uintptr_t)code + 4 + num_bytes + replaced_bytes) - 5);
+
+	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READ, NULL);
 
 	/* jump to new code */
 	tmpbuf[0] = 0xe9;
@@ -248,13 +248,13 @@ trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn)
 		return;
 	}
 
-	VirtualProtect(orig, replaced_bytes + 5, PAGE_EXECUTE_READWRITE, NULL);
-
 	/* copy original code to a buffer */
 	memcpy(orig, (void *)addr, replaced_bytes);
 	/* follow it by a jump to the rest of original code */
 	orig[replaced_bytes] = 0xe9;
 	u32_to_str(orig + replaced_bytes + 1, (uint32_t)(uintptr_t)addr + replaced_bytes - (uintptr_t)orig - replaced_bytes - 5);
+
+	VirtualProtect(orig, replaced_bytes + 5, PAGE_EXECUTE_READ, NULL);
 
 	/* patch the original code to do a jump */
 	buf[0] = 0xe9;
