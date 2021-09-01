@@ -96,7 +96,7 @@ patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
 {
 	char tmp[1024];
 	size_t tmplen = 0;
-	DWORD prevProt;
+	DWORD prevProt, prevProt2;
 	int i;
 
 	for (i = 0; i < num_bytes; i++) {
@@ -107,7 +107,7 @@ patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
 	backup_mem(addr, num_bytes);
 	VirtualProtect((void *)addr, num_bytes, PAGE_EXECUTE_READWRITE, &prevProt);
 	memcpy((void *)addr, buf, num_bytes);
-	VirtualProtect((void *)addr, num_bytes, prevProt, NULL);
+	VirtualProtect((void *)addr, num_bytes, prevProt, &prevProt2);
 }
 
 void
@@ -168,6 +168,7 @@ trampoline_call(uintptr_t addr, unsigned replaced_bytes, void *fn)
 {
 	char buf[32];
 	char *code;
+	DWORD prevprot;
 
 	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
 	code = VirtualAlloc(NULL, (14 + replaced_bytes + 0xFFF) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -188,7 +189,7 @@ trampoline_call(uintptr_t addr, unsigned replaced_bytes, void *fn)
 	u32_to_str(code + 10 + replaced_bytes, /* jump back rel addr */
 			addr + replaced_bytes - ((uintptr_t)code + 9 + replaced_bytes) - 5);
 
-	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READ, NULL);
+	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READ, &prevprot);
 
 	/* jump to new code */
 	buf[0] = 0xe9;
@@ -202,6 +203,7 @@ trampoline_buf(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigne
 {
 	char tmpbuf[32];
 	char *code;
+	DWORD prevprot;
 
 	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
 	code = VirtualAlloc(NULL, (9 + num_bytes + replaced_bytes + 0xFFF) & ~0xFFF, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -221,7 +223,7 @@ trampoline_buf(uintptr_t addr, unsigned replaced_bytes, const char *buf, unsigne
 	u32_to_str(code + 5 + num_bytes + replaced_bytes, /* jump back rel addr */
 			addr + replaced_bytes - ((uintptr_t)code + 4 + num_bytes + replaced_bytes) - 5);
 
-	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READ, NULL);
+	VirtualProtect(code, 14 + replaced_bytes, PAGE_EXECUTE_READ, &prevprot);
 
 	/* jump to new code */
 	tmpbuf[0] = 0xe9;
@@ -239,6 +241,7 @@ trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn)
 	char orig_code[32];
 	char buf[32];
 	char *orig;
+	DWORD oldprot;
 
 	memcpy(orig_code, (void *)addr, replaced_bytes);
 
@@ -254,7 +257,7 @@ trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn)
 	orig[replaced_bytes] = 0xe9;
 	u32_to_str(orig + replaced_bytes + 1, (uint32_t)(uintptr_t)addr + replaced_bytes - (uintptr_t)orig - replaced_bytes - 5);
 
-	VirtualProtect(orig, replaced_bytes + 5, PAGE_EXECUTE_READ, NULL);
+	VirtualProtect(orig, replaced_bytes + 5, PAGE_EXECUTE_READ, &oldprot);
 
 	/* patch the original code to do a jump */
 	buf[0] = 0xe9;
@@ -287,7 +290,7 @@ restore_mem(void)
 	struct mem_region_4kb *reg_4k;
 	struct mem_region_1mb *reg_1m;
 	unsigned i, j, b;
-	DWORD prevProt;
+	DWORD prevProt, prevProt2;
 	void *addr;
 
 	for (i = 0; i < 4096; i++) {
@@ -309,7 +312,7 @@ restore_mem(void)
 					*(char *)(addr + b) = *(char *)(reg_4k->data + b);
 				}
 			}
-			VirtualProtect(addr, 4096, prevProt, NULL);
+			VirtualProtect(addr, 4096, prevProt, &prevProt2);
 		}
 	}
 }
