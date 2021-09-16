@@ -41,6 +41,7 @@
 #include "avl.h"
 #include "pw_item_desc.h"
 #include "extlib.h"
+#include "idmap.h"
 
 extern bool g_use_borderless;
 extern unsigned g_target_dialog_pos_y;
@@ -51,6 +52,8 @@ bool g_replace_font = true;
 static wchar_t g_version[32];
 static wchar_t g_build[32];
 static HMODULE g_unload_event;
+
+static struct pw_idmap *g_elements_map;
 
 static void
 set_borderless_fullscreen(bool is_fullscreen)
@@ -424,7 +427,7 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 }
 
 static void __thiscall
-hooked_pw_console_cmd(void *ui_manager, const wchar_t *msg)
+hooked_pw_console_cmd(void *ui_manager, wchar_t *msg)
 {
 	wchar_t tmp[512];
 
@@ -432,7 +435,22 @@ hooked_pw_console_cmd(void *ui_manager, const wchar_t *msg)
 		_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd %s", msg + 2);
 		msg = tmp;
 	} else if (msg[0] == 'd' && msg[1] == 'i' && msg[2] == ' ') {
-		_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd 10800 %s", msg + 3);
+		struct pw_idmap_el *node;
+		unsigned pid = 0, id = 0;
+		uint64_t lid;
+		int rc;
+
+		if (msg[3] == '#') {
+			msg[3] = ' ';
+		}
+
+		rc = swscanf(msg + 3, L"%d : %d", &pid, &id);
+		if (rc == 2 && g_elements_map) {
+			lid = (pid > 0 ? 0x80000000 : 0) + 0x100000 * pid + id;
+			_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd 10800 %d", pw_idmap_get_mapping(g_elements_map, lid, 0));
+		} else {
+			_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd 10800 %s", msg + 3);
+		}
 		msg = tmp;
 	}
 
@@ -799,6 +817,12 @@ ThreadMain(LPVOID _unused)
 	if (pw_find_pwi_game_data() == 0) {
 		MessageBox(NULL, "Failed to find PW process. Is the game running?", "Error", MB_OK);
 		return 1;
+	}
+
+	g_elements_map = pw_idmap_init("elements", "..\\patcher\\elements.imap", false);
+	if (!g_elements_map) {
+		/* nothing scary, just continue */
+		pw_log_color(0xDD1100, "pw_idmap_init() failed");
 	}
 
 	set_pw_version();
