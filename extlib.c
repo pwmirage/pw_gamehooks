@@ -38,7 +38,7 @@
 #include "extlib.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
-#include "cimgui.h"
+#include <cimgui.h>
 
 /* we don't need full libintl */
 char * libintl_dgettext(char *domain, char *mesgid) { return NULL; };

@@ -37,11 +37,38 @@
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
 #include "cimgui.h"
 
-static HRESULT (__stdcall *endScene_org)(LPDIRECT3DDEVICE9 pDevice);
-static HRESULT (__stdcall *Reset_org)(LPDIRECT3DDEVICE9 pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters);
-static LPDIRECT3DDEVICE9 g_device = NULL;
+static void *g_device = NULL;
 static ImFont *g_font;
 static ImFont *g_font13;
+
+struct d3d_ptrs {
+	void (*init)(void *device);
+	void (*new_frame)(void);
+	void (*render)(void *data);
+	void (*invalidate_data)(void);
+	void (*reinit_data)(void);
+	void (*shutdown)(void);
+};
+
+struct d3d_ptrs g_d3d9_ptrs = {
+	.init = (void *)ImGui_ImplDX9_Init,
+	.new_frame = (void *)ImGui_ImplDX9_NewFrame,
+	.render = (void *)ImGui_ImplDX9_RenderDrawData,
+	.invalidate_data = (void *)ImGui_ImplDX9_InvalidateDeviceObjects,
+	.reinit_data = (void *)ImGui_ImplDX9_CreateDeviceObjects,
+	.shutdown = (void *)ImGui_ImplDX9_Shutdown
+};
+
+struct d3d_ptrs g_d3d8_ptrs = {
+	.init = (void *)ImGui_ImplDX8_Init,
+	.new_frame = (void *)ImGui_ImplDX8_NewFrame,
+	.render = (void *)ImGui_ImplDX8_RenderDrawData,
+	.invalidate_data = (void *)ImGui_ImplDX8_InvalidateDeviceObjects,
+	.reinit_data = (void *)ImGui_ImplDX8_CreateDeviceObjects,
+	.shutdown = (void *)ImGui_ImplDX8_Shutdown
+};
+
+struct d3d_ptrs *g_d3d_ptrs;
 
 unsigned g_target_dialog_pos_y;
 
@@ -346,30 +373,32 @@ imgui_init(void)
 
 
 static unsigned __stdcall
-hooked_a3d_end_scene(unsigned unk)
+hooked_a3d_end_scene(void *device_d3d8)
 {
-	unsigned __stdcall (*real_end_scene)(unsigned unk);
-
-	__asm__(
-		"mov %0, dword ptr [eax + 0x8c];"
-		: "=r"(real_end_scene));
+	unsigned __stdcall (*real_end_scene)(PDIRECT3DDEVICE9 device) = *(void **)(*(void **)device_d3d8 + 0x8c);
 
 	if (g_unloading) {
-		return real_end_scene(unk);
+		return real_end_scene(device_d3d8);
 	}
 
-	PDIRECT3DDEVICE9 device = *(void **)(unk + 0xc);
 	if (!g_device) {
+		void *device;
+		if (game_config_get("d3d8", "0")[0] == '1') {
+			device = device_d3d8;
+		} else {
+			/* pointer inside d3d8to9 structure */
+			device = *(void **)(device_d3d8 + 0xc);
+		}
+
 		g_device = device;
 		igCreateContext(NULL);
 
 		ImGui_ImplWin32_Init(g_window);
-		ImGui_ImplDX9_Init(device);
-
+		g_d3d_ptrs->init(device);
 		imgui_init();
 	}
 
-	ImGui_ImplDX9_NewFrame();
+	g_d3d_ptrs->new_frame();
 	ImGui_ImplWin32_NewFrame();
 	igNewFrame();
 
@@ -383,9 +412,9 @@ hooked_a3d_end_scene(unsigned unk)
 
 	igEndFrame();
 	igRender();
-	ImGui_ImplDX9_RenderDrawData(igGetDrawData());
+	g_d3d_ptrs->render(igGetDrawData());
 
-	return real_end_scene(unk);
+	return real_end_scene(device_d3d8);
 }
 
 static unsigned __stdcall
@@ -401,11 +430,8 @@ hooked_a3d_device_reset(void)
 		"mov %2, dword ptr [edx + 0x38];"
 		: "=r"(unk1), "=r"(unk2), "=r"(real_device_reset));
 
-	ImGui_ImplDX9_InvalidateDeviceObjects();
+	g_d3d_ptrs->invalidate_data();
 	ret = real_device_reset(unk1, unk2);
-	if (!g_unloading) {
-		ImGui_ImplDX9_CreateDeviceObjects();
-	}
 
 	g_target_dialog_pos_y = 0;
 	return ret;
@@ -415,8 +441,9 @@ int
 d3d_hook()
 {
 	if (game_config_get("d3d8", "0")[0] == '1') {
-		/* we can't hook into d3d8 */
-		return S_OK;
+		g_d3d_ptrs = &g_d3d8_ptrs;
+	} else {
+		g_d3d_ptrs = &g_d3d9_ptrs;
 	}
 
 	patch_mem(0x70b1fb, "\xe8\x00\x00\x00\x00\x90", 6);
@@ -436,7 +463,7 @@ d3d_unhook(void)
 		return;
 	}
 
-	ImGui_ImplDX9_Shutdown();
+	g_d3d_ptrs->shutdown();
 }
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
