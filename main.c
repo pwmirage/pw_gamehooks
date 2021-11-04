@@ -790,6 +790,22 @@ hooked_get_recipe_to_display(void *this, int unk1, char unk2)
 	return recipe;
 }
 
+static void *__thiscall
+hooked_show_world_chat_messagebox(int unk1, int unk2)
+{
+	static void *__thiscall (*real_fn)(int unk1, int unk2) = (void *)0x6d2df0;
+	static bool __thiscall (*close_message_box_fn)(void *ui_man, int retval, void *message_box) = (void *)0x5502c0;
+	void * ret;
+void *dlg;
+
+	ret = real_fn(unk1, unk2);
+
+	dlg = pw_get_dialog(g_pw_data->game->ui->ui_manager, "Game_ChatWorld");
+	close_message_box_fn(g_pw_data->game->ui->ui_manager, 6, dlg);
+
+	return ret;
+}
+
 static DWORD WINAPI
 ThreadMain(LPVOID _unused)
 {
@@ -955,6 +971,12 @@ ThreadMain(LPVOID _unused)
 
 	/* show bank slots >= 100 (3 digits) */
 	patch_mem(0x8db72f, "3", 1);
+
+	/* allow WC without teles */
+	patch_mem(0x4b89ef, "\x90\x90", 2);
+
+	/* auto-confirm WC message box */
+	patch_jmp32(0x4b8ddd, (uintptr_t)hooked_show_world_chat_messagebox);
 
 	d3d_hook();
 
