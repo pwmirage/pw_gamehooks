@@ -390,7 +390,7 @@ set_pw_version(void)
 }
 
 static void __thiscall
-hooked_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int idPlayer, int szName, char byFlag, char emotion)
+hooked_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int player_id, const wchar_t *name, char unk, char emote)
 {
 	if (channel == 12) {
 		pw_log("received (%d): %S", channel, str);
@@ -398,9 +398,14 @@ hooked_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int 
 			g_update_show = true;
 		}
 		return;
+	} else if (channel == 13) {
+		wchar_t msg[256];
+		snwprintf(msg, sizeof(msg) / sizeof(msg[0]), L"(Discord) %s", str);
+		pw_add_chat_message(cecgamerun, msg, 1, -1, L"Discord", unk, emote);
+		return;
 	}
 
-	pw_add_chat_message(cecgamerun, str, channel, idPlayer, szName, byFlag, emotion);
+	pw_add_chat_message(cecgamerun, str, channel, player_id, name, unk, emote);
 }
 
 static unsigned __thiscall
