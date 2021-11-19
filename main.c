@@ -987,25 +987,20 @@ ThreadMain(LPVOID _unused)
 
 	d3d_init_settings(D3D_INIT_SETTINGS_INITIAL);
 
+	/* don't let the game reset GWL_EXSTYLE to 0 */
 	patch_mem(0x40bf43, "\x81\xc4\x0c\x00\x00\x00", 6);
 
 	patch_jmp32(0x40b257, (uintptr_t)read_fullscreen_opt);
-	patch_jmp32(0x40b842, (uintptr_t)save_fullscreen_opt);
-	patch_jmp32(0x55006d, (uintptr_t)on_ui_change);
-	patch_jmp32(0x6e099b, (uintptr_t)on_combo_change);
-	patch_jmp32(0x4faea2, (uintptr_t)setup_fullscreen_combo);
-	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
-
 	patch_mem_u32(0x85f454, (uintptr_t)hooked_fseek);
-
+	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
 	/* don't run pwprotector */
 	patch_mem(0x8cfb30, "_", 1);
 
-	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
-
+	/* hook into exit */
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
 
+	/* replace the exception handler */
 	patch_mem(0x417aba, "\xe9", 1);
 	patch_jmp32(0x417aba, (uintptr_t)hooked_exception_handler);
 
@@ -1018,6 +1013,22 @@ ThreadMain(LPVOID _unused)
 		org_CreateFontIndirectExW = (void *)GetProcAddress(gdi_full_h, "CreateFontIndirectExW");
 		trampoline_winapi_fn((void **)&org_CreateFontIndirectExW, (void *)hooked_CreateFontIndirectExW);
 	}
+
+	if (pw_wait_for_win() == 0) {
+		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
+		return 1;
+	}
+
+	if (g_sel_fullscreen) {
+		set_borderless_fullscreen(g_sel_fullscreen);
+	}
+
+	patch_jmp32(0x40b842, (uintptr_t)save_fullscreen_opt);
+	patch_jmp32(0x55006d, (uintptr_t)on_ui_change);
+	patch_jmp32(0x6e099b, (uintptr_t)on_combo_change);
+	patch_jmp32(0x4faea2, (uintptr_t)setup_fullscreen_combo);
+	patch_jmp32(0x4faec1, (uintptr_t)setup_fullscreen_combo);
+
 
 	/* "teleport" other players only when they're moving >= 25m/s (instead of default >= 10m/s) */
 	patch_mem_u32(0x442bee, (uint32_t)&g_local_max_move_speed);
@@ -1064,7 +1075,6 @@ ThreadMain(LPVOID _unused)
 	/* ^ for equipping items from action bar */
 	patch_mem(0x492de9, "\x00", 1);
 
-
 	/* force screenshots via direct3d, not angellica engine */
 	patch_mem(0x433e35, "\xeb", 1);
 
@@ -1072,15 +1082,6 @@ ThreadMain(LPVOID _unused)
 	trampoline_fn((void **)&pw_console_cmd, 6, hooked_pw_console_cmd);
 	trampoline_fn((void **)&pw_on_game_enter, 7, hooked_on_game_enter);
 	trampoline_fn((void **)&pw_on_game_leave, 5, hooked_on_game_leave);
-
-	if (pw_wait_for_win() == 0) {
-		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
-		return 1;
-	}
-
-	if (g_sel_fullscreen) {
-		set_borderless_fullscreen(g_sel_fullscreen);
-	}
 
 	/* always enable ingame console */
 	patch_mem(0x927cc8, "\x01", 1);
