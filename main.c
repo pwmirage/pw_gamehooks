@@ -280,6 +280,38 @@ static WNDPROC g_orig_event_handler;
 #define WM_MOUSEHWHEEL 0x020E
 #endif
 
+#define MG_CB_MSG (WM_USER + 165)
+
+typedef void (*mg_callback)(void *arg1, void *arg2);
+
+struct ui_thread_ctx {
+	mg_callback cb;
+	void *arg1;
+	void *arg2;
+};
+
+void
+pw_ui_thread_sendmsg(mg_callback cb, void *arg1, void *arg2)
+{
+	struct ui_thread_ctx *ctx = malloc(sizeof(*ctx));
+	assert(ctx != NULL);
+	ctx->cb = cb;
+	ctx->arg1 = arg1;
+	ctx->arg2 = arg2;
+	SendMessage(g_window, MG_CB_MSG, 0, (LPARAM)ctx);
+}
+
+void
+pw_ui_thread_postmsg(mg_callback cb, void *arg1, void *arg2)
+{
+	struct ui_thread_ctx *ctx = malloc(sizeof(*ctx));
+	assert(ctx != NULL);
+	ctx->cb = cb;
+	ctx->arg1 = arg1;
+	ctx->arg2 = arg2;
+	PostMessage(g_window, MG_CB_MSG, 0, (LPARAM)ctx);
+}
+
 static LRESULT CALLBACK
 event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
@@ -309,31 +341,15 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		}
 		break;
 	case WM_KILLFOCUS:
-		if (g_fullscreen) {
-			POINT mouse_pos;
-			RECT win_pos;
-			int safe_margin = 5;
-
-			GetWindowRect(g_window, &win_pos);
-			GetCursorPos(&mouse_pos);
-
-			if (mouse_pos.x > win_pos.left + safe_margin &&
-					mouse_pos.x < win_pos.right - safe_margin &&
-					mouse_pos.y > win_pos.top + safe_margin &&
-					mouse_pos.y < win_pos.bottom - safe_margin) {
-				ShowWindow(g_window, SW_MINIMIZE);
-			}
-			break;
-		}
 		break;
 	case WM_SYSCOMMAND:
 		switch (data) {
 		case SC_MINIMIZE:
 			/* PW doesnt react to this message and keeps using CPU, so make it stop */
-			PostMessage(g_window, WM_ACTIVATEAPP, 0, 0);
+			g_pw_data->is_render_active = false;
 			break;
 		case SC_RESTORE:
-			PostMessage(g_window, WM_ACTIVATEAPP, 1, 0);
+			g_pw_data->is_render_active = true;
 			break;
 		default:
 			break;
@@ -343,6 +359,14 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 		/* do not beep! */
 		return MNC_CLOSE << 16;
+	case MG_CB_MSG: {
+		struct ui_thread_ctx ctx, *org_ctx = (void *)lparam;
+
+		ctx = *org_ctx;
+		free(org_ctx);
+		ctx.cb(ctx.arg1, ctx.arg2);
+		break;
+	}
 	default:
 		break;
 	}
@@ -365,6 +389,119 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 
 	/* let the game handle this key */
 	return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
+}
+
+static HHOOK g_win_hook;
+
+static bool
+is_mouse_over_window(int safe_margin)
+{
+	POINT mouse_pos;
+	RECT win_pos;
+
+	GetWindowRect(g_window, &win_pos);
+	GetCursorPos(&mouse_pos);
+
+	if (mouse_pos.x > win_pos.left + safe_margin &&
+			mouse_pos.x < win_pos.right - safe_margin &&
+			mouse_pos.y > win_pos.top + safe_margin &&
+			mouse_pos.y < win_pos.bottom - safe_margin) {
+		return true;
+	}
+
+	return false;
+}
+
+static void
+check_and_minize_win_cb(void *arg1, void *arg2)
+{
+	if (g_use_borderless && g_fullscreen && GetActiveWindow() != g_window &&
+			is_mouse_over_window(5)) {
+		ShowWindow(g_window, SW_MINIMIZE);
+		g_pw_data->is_render_active = false;
+	}
+}
+
+static int g_alt_tab_press_cnt = 0;
+
+LRESULT __stdcall
+event_ll_handler(int ncode, WPARAM wparam, LPARAM lparam)
+{
+	KBDLLHOOKSTRUCT *event = (void *)(uintptr_t)lparam;
+
+	if (ncode < 0) {
+		return CallNextHookEx(g_win_hook, ncode, wparam, lparam);
+	}
+
+	unsigned key = event->vkCode;
+	switch (wparam) {
+		case WM_SYSKEYDOWN:
+			/* keydown while alt is pressed (incl. alt) */
+			if (key == VK_TAB) {
+				/* wait for both alt and tab to be de-pressed,
+				 * then try minimizing the window */
+				g_alt_tab_press_cnt = 2;
+			}
+			break;
+		case WM_SYSKEYUP:
+			/* keyup while alt is pressed (except the alt itself) */
+			switch(key) {
+				case VK_TAB: {
+					if (--g_alt_tab_press_cnt == 0) {
+						pw_ui_thread_postmsg(check_and_minize_win_cb,
+								NULL, NULL);
+					}
+					break;
+				}
+				default:
+					break;
+			}
+			break;
+		case WM_KEYDOWN:
+			switch (key) {
+				default:
+					break;
+			}
+			break;
+		case WM_KEYUP:
+			switch (key) {
+				case VK_TAB:
+				case VK_LMENU:
+				case VK_RMENU: {
+					if (--g_alt_tab_press_cnt == 0) {
+						pw_ui_thread_postmsg(check_and_minize_win_cb,
+								NULL, NULL);
+					}
+					break;
+				}
+				case VK_LWIN:
+				case VK_RWIN:
+					if (g_use_borderless &&g_fullscreen &&
+							GetActiveWindow() == g_window &&
+							is_mouse_over_window(5)) {
+						ShowWindow(g_window, SW_MINIMIZE);
+						g_pw_data->is_render_active = false;
+					}
+					break;
+			}
+			break;
+	}
+
+	return CallNextHookEx(g_win_hook, ncode, wparam, lparam);
+}
+
+static void
+hook_keyboard_ll(void *arg1, void *arg2)
+{
+	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
+}
+
+static void
+unhook_keyboard_ll(void *arg1, void *arg2)
+{
+	if (g_win_hook) {
+		UnhookWindowsHookEx(g_win_hook);
+	}
 }
 
 static void
@@ -872,13 +1009,13 @@ ThreadMain(LPVOID _unused)
 	patch_mem(0x417aba, "\xe9", 1);
 	patch_jmp32(0x417aba, (uintptr_t)hooked_exception_handler);
 
-	HMODULE hGdiFull = GetModuleHandle("gdi32full.dll");
-	if (!hGdiFull) {
-		hGdiFull = GetModuleHandle("gdi32.dll");
-	}
-
 	if (game_config_get("custom_tag_font", "0")[0] == '1') {
-		org_CreateFontIndirectExW = (void *)GetProcAddress(hGdiFull, "CreateFontIndirectExW");
+		HMODULE gdi_full_h = GetModuleHandle("gdi32full.dll");
+		if (!gdi_full_h) {
+			gdi_full_h = GetModuleHandle("gdi32.dll");
+		}
+
+		org_CreateFontIndirectExW = (void *)GetProcAddress(gdi_full_h, "CreateFontIndirectExW");
 		trampoline_winapi_fn((void **)&org_CreateFontIndirectExW, (void *)hooked_CreateFontIndirectExW);
 	}
 
@@ -990,9 +1127,12 @@ ThreadMain(LPVOID _unused)
 
 	g_unload_event = CreateEvent(NULL, TRUE, FALSE, NULL);
 
+	pw_ui_thread_sendmsg(hook_keyboard_ll, NULL, NULL);
+
 	/* process our custom windows input */
 	WaitForSingleObject(g_unload_event, (DWORD)INFINITY);
 
+	pw_ui_thread_sendmsg(unhook_keyboard_ll, NULL, NULL);
 	game_config_save(true);
 
 	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
