@@ -1,7 +1,7 @@
 OBJECTS = main.o pw_api.o gamehook_rc.o common.o d3d.o game_config.o avl.o pw_item_desc.o idmap.o
 LIB_OBJECTS = crash_handler.o extlib.o
-CFLAGS := -m32 -O2 -g -MD -MP -masm=intel $(CFLAGS)
-CFLAGS += -DHOOK_BUILD_DATE=\"$(shell date +'%b\ %d')\"
+CFLAGS := -m32 -O2 -g -MMD -MP -masm=intel $(CFLAGS)
+CFLAGS += -DHOOK_BUILD_DATE="\"$(shell date +'%b %d')\""
 
 $(shell mkdir -p build &>/dev/null)
 

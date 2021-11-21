@@ -34,14 +34,14 @@ echo(const char *fmt, ...)
 }
 
 static int
-build(void)
+exec_unsafe(const char *cmd)
 {
 	FILE *fp;
 	char path[1048];
 
-	echo("$ make\n");
 	/* Open the command for reading. */
-	fp = popen("make 2>&1", "r");
+	snprintf(path, sizeof(path), "%s 2>&1", cmd);
+	fp = popen(path, "r");
 	if (fp == NULL) {
 		perror("");
 		exit(1);
@@ -208,17 +208,19 @@ handle_conn(void)
 	buf[rc] = 0;
 	printf("cmd: %s\n", buf);
 
-	rc = build();
-	if (rc != 0) {
-		return rc;
-	}
-
-	GetExitCodeProcess(g_game_handle, &exit_code);
-	if (exit_code != STILL_ACTIVE) {
-		rc = start_game();
-	} else {
-		rc = detach_dll(g_game_procid, g_game_dll);
-		rc = rc || inject();
+	if (strchr(buf, ';') != NULL) {
+		echo("Error: found invalid character - \";\"");
+		return -1;
+	} else if (strncmp(buf, "gcc ", 4) == 0) {
+		return exec_unsafe(buf);
+	} else if (strncmp(buf, "hook", 4) == 0) {
+		GetExitCodeProcess(g_game_handle, &exit_code);
+		if (exit_code != STILL_ACTIVE) {
+			rc = start_game();
+		} else {
+			rc = detach_dll(g_game_procid, g_game_dll);
+			rc = rc || inject();
+		}
 	}
 	return rc;
 }
