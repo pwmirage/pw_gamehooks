@@ -188,9 +188,6 @@ static void * (*pw_alloc_item)(uint32_t id, uint32_t expire_time, uint32_t count
 static void * (*pw_alloc)(size_t size) = (void *)0x6f5480;
 static void (*pw_free)(void *addr) = (void *)0x6f5490;
 
-HWND pw_wait_for_win(void);
-HMODULE pw_find_pwi_game_data(void);
-
 void pw_populate_console_log(void);
 int pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args);
 int pw_log_acolor(unsigned argb_color, const char *fmt, ...);

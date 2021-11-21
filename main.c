@@ -51,27 +51,32 @@ static bool g_sel_fullscreen = false;
 bool g_replace_font = true;
 static wchar_t g_version[32];
 static wchar_t g_build[32];
-static HMODULE g_unload_event;
 
 static struct pw_idmap *g_elements_map;
+
+struct rect {
+	int x, y, w, h;
+};
+
+static struct rect g_window_size;
 
 static void
 set_borderless_fullscreen(bool is_fullscreen)
 {
-	static int x, y, w, h;
 	RECT rect;
 
-	if (w == 0 || is_fullscreen) {
+	if (g_window_size.w == 0 || is_fullscreen) {
 		/* save window position & dimensions */
 		GetWindowRect(g_window, &rect);
-		x = rect.left;
-		y = rect.top;
-		w = rect.right - rect.left;
-		h = rect.bottom - rect.top;
+		g_window_size.x = rect.left;
+		g_window_size.y = rect.top;
+		g_window_size.w = rect.right - rect.left;
+		g_window_size.h = rect.bottom - rect.top;
 	}
 
 	g_fullscreen = is_fullscreen;
 	g_target_dialog_pos_y = 0;
+
 	if (is_fullscreen) {
 		int fw, fh;
 
@@ -87,7 +92,10 @@ set_borderless_fullscreen(bool is_fullscreen)
 		patch_mem_u32(0x40beb5, 0x80ce0000);
 		patch_mem_u32(0x40beac, 0x80ce0000);
 		SetWindowLong(g_window, GWL_STYLE, 0x80ce0000);
-		SetWindowPos(g_window, HWND_TOP, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOSIZE);
+		SetWindowPos(g_window, HWND_TOP,
+				g_window_size.x, g_window_size.y,
+				g_window_size.w, g_window_size.h,
+				SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOSIZE);
 	}
 }
 
@@ -126,6 +134,7 @@ static unsigned __stdcall
 save_fullscreen_opt(void *unk1, void *unk2, unsigned is_fullscreen)
 {
 	unsigned __stdcall (*real_fn)(void *, void *, unsigned) = (void *)0x6ff810;
+
 	return real_fn(unk1, unk2, g_fullscreen);
 }
 
@@ -491,20 +500,6 @@ event_ll_handler(int ncode, WPARAM wparam, LPARAM lparam)
 }
 
 static void
-hook_keyboard_ll(void *arg1, void *arg2)
-{
-	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
-}
-
-static void
-unhook_keyboard_ll(void *arg1, void *arg2)
-{
-	if (g_win_hook) {
-		UnhookWindowsHookEx(g_win_hook);
-	}
-}
-
-static void
 set_pw_version(void)
 {
 	FILE *fp = fopen("../patcher/version", "rb");
@@ -623,11 +618,11 @@ hooked_pw_get_info_on_acquire(unsigned char inv_id, unsigned char slot_id)
     }
 }
 
-static DWORD g_tid;
-static bool g_tid_finished = false;
 bool g_exiting = false;
 bool g_unloading = false;
 static float g_local_max_move_speed = 25.0f;
+
+static void uninit_cb(void *arg1, void *arg2);
 
 static void
 hooked_exit(void)
@@ -638,8 +633,7 @@ hooked_exit(void)
 
 	/* our hacks sometimes crash on exit, not sure why. they're hacks, so just ignore the errors */
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-
-	SetEvent(g_unload_event);
+	uninit_cb(NULL, NULL);
 }
 
 static size_t
@@ -948,10 +942,9 @@ void *dlg;
 	return ret;
 }
 
-static DWORD WINAPI
-ThreadMain(LPVOID _unused)
+static int
+init_hooks(void)
 {
-	MSG msg;
 	int rc;
 
 	setup_crash_handler(append_crash_info_cb, NULL);
@@ -960,22 +953,17 @@ ThreadMain(LPVOID _unused)
 	rc = game_config_parse("..\\patcher\\game.cfg");
 	if (rc != 0) {
 		MessageBox(NULL, "Can't load the config file at ../patcher/game.cfg", "Error", MB_OK);
-		return 1;
+		return rc;
 	}
 
 	rc = pw_item_desc_load("..\\patcher\\item_desc.data");
 	if (rc != 0) {
 		MessageBox(NULL, "Failed to load item description from patcher/item_desc.data",
 				"Error", MB_OK);
-		return 1;
+		return rc;
 	}
 
 	pw_avl_foreach(g_pw_item_desc_avl, item_desc_avl_wchar_fn, NULL, NULL);
-
-	if (pw_find_pwi_game_data() == 0) {
-		MessageBox(NULL, "Failed to find PW process. Is the game running?", "Error", MB_OK);
-		return 1;
-	}
 
 	g_elements_map = pw_idmap_init("elements", "..\\patcher\\elements.imap", false);
 	if (!g_elements_map) {
@@ -991,10 +979,7 @@ ThreadMain(LPVOID _unused)
 	patch_mem(0x40bf43, "\x81\xc4\x0c\x00\x00\x00", 6);
 
 	patch_jmp32(0x40b257, (uintptr_t)read_fullscreen_opt);
-	patch_mem_u32(0x85f454, (uintptr_t)hooked_fseek);
 	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
-	/* don't run pwprotector */
-	patch_mem(0x8cfb30, "_", 1);
 
 	/* hook into exit */
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
@@ -1012,15 +997,6 @@ ThreadMain(LPVOID _unused)
 
 		org_CreateFontIndirectExW = (void *)GetProcAddress(gdi_full_h, "CreateFontIndirectExW");
 		trampoline_winapi_fn((void **)&org_CreateFontIndirectExW, (void *)hooked_CreateFontIndirectExW);
-	}
-
-	if (pw_wait_for_win() == 0) {
-		MessageBox(NULL, "Failed to find the PW game window", "Status", MB_OK);
-		return 1;
-	}
-
-	if (g_sel_fullscreen) {
-		set_borderless_fullscreen(g_sel_fullscreen);
 	}
 
 	patch_jmp32(0x40b842, (uintptr_t)save_fullscreen_opt);
@@ -1123,36 +1099,143 @@ ThreadMain(LPVOID _unused)
 
 	d3d_hook();
 
+	return 0;
+}
+
+static void
+_patch_mem_unsafe(uintptr_t addr, const char *buf, unsigned num_bytes)
+{
+	DWORD prevProt, prevProt2;
+
+	VirtualProtect((void *)addr, num_bytes, PAGE_EXECUTE_READWRITE, &prevProt);
+	memcpy((void *)addr, buf, num_bytes);
+	VirtualProtect((void *)addr, num_bytes, prevProt, &prevProt2);
+}
+
+static void
+_patch_mem_u32_unsafe(uintptr_t addr, uint32_t u32)
+{
+	union {
+		char c[4];
+		uint32_t u;
+	} u;
+
+	u.u = u32;
+	patch_mem(addr, u.c, 4);
+}
+
+static void
+_patch_jmp32_unsafe(uintptr_t addr, uintptr_t fn)
+{
+	patch_mem_u32(addr + 1, fn - addr - 5);
+}
+
+static bool
+hooked_init_window(HINSTANCE hinstance, int do_show, bool is_fullscreen)
+{
+	int rc;
+	int styles;
+
+	rc = init_hooks();
+	if (rc != 0) {
+		return false;
+	}
+
+	if (is_fullscreen && g_use_borderless) {
+		styles = 0x80000000;
+	}else {
+		styles = 0x80ce0000;
+	}
+
+
+	int x = 0;
+	int y = 0;
+	int w = *(int *)0x927d82;
+	int h = *(int *)0x927d86;
+
+	if (!is_fullscreen) {
+		RECT rect = { 0, 0, w, h };
+		AdjustWindowRect(&rect, styles, false);
+
+		w = rect.right - rect.left;
+		h = rect.bottom - rect.top;
+		x = (GetSystemMetrics(SM_CXFULLSCREEN) - w) / 2;
+		y = (GetSystemMetrics(SM_CYFULLSCREEN) - h) / 2;
+	}
+
+	g_window_size.x = x;
+	g_window_size.y = y;
+	g_window_size.w = w;
+	g_window_size.h = h;
+
+	g_window = CreateWindowEx(0, "ElementClient Window", "PW Mirage", styles,
+			x, y, w, h, NULL, NULL, hinstance, NULL);
+	if (!g_window) {
+		return false;
+	}
+
+	if (g_use_borderless) {
+		set_borderless_fullscreen(g_use_borderless && is_fullscreen);
+	} else {
+		g_fullscreen = is_fullscreen;
+	}
+
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
+	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
 
-	g_unload_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+	/* used by PW */
+	*(HINSTANCE *)0x927f5c = hinstance;
+	*(HWND *)(uintptr_t)0x927f60 = g_window;
 
-	pw_ui_thread_sendmsg(hook_keyboard_ll, NULL, NULL);
+	ShowWindow(g_window, SW_SHOW);
+	UpdateWindow(g_window);
+	SetForegroundWindow(g_window);
 
-	/* process our custom windows input */
-	WaitForSingleObject(g_unload_event, (DWORD)INFINITY);
+	/* force the window into foreground */
+	DWORD d = 0;
+	DWORD windowThreadProcessId = GetWindowThreadProcessId(GetForegroundWindow(), &d);
+	DWORD currentThreadId = GetCurrentThreadId();
+	AttachThreadInput(windowThreadProcessId, currentThreadId, true);
+	BringWindowToTop(g_window);
+	ShowWindow(g_window, SW_SHOW);
+	AttachThreadInput(windowThreadProcessId,currentThreadId, false);
 
-	pw_ui_thread_sendmsg(unhook_keyboard_ll, NULL, NULL);
-	game_config_save(true);
+	return true;
+}
 
-	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
+static unsigned __thiscall
+hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
+{
+	int rc;
 
-	if (g_exiting) {
-		/* no need to cleanup anything */
-		g_tid_finished = true;
+	_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)pw_game_tick);
+
+	rc = init_hooks();
+	if (rc != 0) {
 		return 0;
 	}
 
+	/* hook into PW input handling */
+	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
+	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
+
+	return pw_game_tick(game, tick_time);
+}
+
+
+static void
+uninit_cb(void *arg1, void *arg2)
+{
+	game_config_save(true);
+
 	pw_log_color(0xDD1100, "PW Hook unloading");
+	if (g_exiting) {
+		/* no need to cleanup anything */
+		return;
+	}
 
 	g_unloading = true;
-
-	restore_mem();
-	d3d_unhook();
-
-	g_tid_finished = true;
-	return 0;
 }
 
 BOOL APIENTRY
@@ -1164,22 +1247,40 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 	case DLL_PROCESS_ATTACH: {
 		DisableThreadLibraryCalls(mod);
 
-		/* don't load gamehook.dll anymore */
-		patch_mem(0x43abd9, "\x83\xc4\x04\x83\xc8\xff", 6);
+		const char dll_disable_buf[] = "\x83\xc4\x04\x83\xc8\xff";
 
-		CreateThread(NULL, 0, ThreadMain, NULL, 0, &g_tid);
+		if (memcmp((void *)(uintptr_t)0x43abd9, dll_disable_buf, 6) == 0) {
+			_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)hooked_pw_game_tick_init);
+			return TRUE;
+		}
+
+		/* don't load gamehook.dll anymore */
+		_patch_mem_unsafe(0x43abd9, "\x83\xc4\x04\x83\xc8\xff", 6);
+
+		/* don't run pwprotector */
+		patch_mem(0x8cfb30, "_", 1);
+
+		/* enable fseek for > 2GB files */
+		_patch_mem_u32_unsafe(0x85f454, (uintptr_t)hooked_fseek);
+
+		/* hook into window creation (before it's actually created */
+		_patch_jmp32_unsafe(0x43aec8, (uintptr_t)hooked_init_window);
+
 		return TRUE;
 	}
 	case DLL_PROCESS_DETACH:
-		PostThreadMessageA(g_tid, WM_QUIT, 0, 0);
-		SetEvent(g_unload_event);
+		pw_ui_thread_sendmsg(uninit_cb, NULL, NULL);
 
-		/* wait for cleanup (not necessarily thread termination) */
-		while (!g_unloading && !g_tid_finished) {
-			Sleep(50);
+		if (g_win_hook) {
+			UnhookWindowsHookEx(g_win_hook);
 		}
 
-		Sleep(1000);
+		SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
+
+		if (!g_exiting) {
+			restore_mem();
+			d3d_unhook();
+		}
 
 		return TRUE;
 	default:
