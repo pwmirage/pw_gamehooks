@@ -145,6 +145,8 @@ static void * __thiscall (*pw_get_skill_by_id)(struct player *host_player, int i
 static void (*pw_normal_attack)(unsigned char pvp_mask) = (void *)0x5a80c0;
 static void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color) = (void *)0x553cc0;
 static void __thiscall (*pw_console_cmd)(void *ui_manager, const wchar_t *msg) = (void *)0x54b440;
+static int __thiscall (*pw_read_local_cfg_opt)(void *unk1, const char *section, const char *name, int def_val) = (void *)0x6ff590;
+static bool __thiscall (*pw_save_local_cfg_opt)(void *unk1, const char *section, const char *name, int val) = (void *)0x6ff810;
 static unsigned __thiscall (*pw_load_configs)(struct game_data *game, void *unk1, int unk2) = (void *)0x431f30;
 static unsigned char (*pw_xz_dir_to_byte)(float dirX, float dirZ) = (void *)0x4179a0;
 static bool __thiscall (*pw_translate3dpos2screen)(void *viewport, float v3d[3], float v2d[3]) = (void *)0x71b1c0;

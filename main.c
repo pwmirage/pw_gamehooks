@@ -46,6 +46,8 @@
 extern bool g_use_borderless;
 extern unsigned g_target_dialog_pos_y;
 
+static int g_profile_id = -1;
+static char g_profile_idstr[32];
 static bool g_fullscreen = false;
 static bool g_sel_fullscreen = false;
 bool g_replace_font = true;
@@ -59,6 +61,16 @@ struct rect {
 };
 
 static struct rect g_window_size;
+
+static void
+set_borderless(bool is_borderless)
+{
+	int style = is_borderless ? 0x80000000 : 0x80ce0000;
+
+	patch_mem_u32(0x40beb5, style);
+	patch_mem_u32(0x40beac, style);
+	SetWindowLong(g_window, GWL_STYLE, style);
+}
 
 static void
 set_borderless_fullscreen(bool is_fullscreen)
@@ -77,6 +89,7 @@ set_borderless_fullscreen(bool is_fullscreen)
 	g_fullscreen = is_fullscreen;
 	g_target_dialog_pos_y = 0;
 
+	set_borderless(is_fullscreen);
 	if (is_fullscreen) {
 		int fw, fh;
 
@@ -84,18 +97,12 @@ set_borderless_fullscreen(bool is_fullscreen)
 		fh = GetSystemMetrics(SM_CYSCREEN);
 
 		/* WinAPI window styles when windowed on every win resize -> PW sets them on every resize */
-		patch_mem_u32(0x40beb5, 0x80000000);
-		patch_mem_u32(0x40beac, 0x80000000);
-		SetWindowLong(g_window, GWL_STYLE, 0x80000000);
 		SetWindowPos(g_window, HWND_TOP, 0, 0, fw, fh, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
 	} else {
-		patch_mem_u32(0x40beb5, 0x80ce0000);
-		patch_mem_u32(0x40beac, 0x80ce0000);
-		SetWindowLong(g_window, GWL_STYLE, 0x80ce0000);
 		SetWindowPos(g_window, HWND_TOP,
 				g_window_size.x, g_window_size.y,
 				g_window_size.w, g_window_size.h,
-				SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOSIZE);
+				SWP_SHOWWINDOW | SWP_FRAMECHANGED);
 	}
 }
 
@@ -115,27 +122,44 @@ setup_fullscreen_combo(void *unk1, void *unk2, unsigned *is_fullscreen)
 	}
 }
 
-static unsigned __thiscall
-read_fullscreen_opt(void *unk1, void *unk2, void *unk3, void *unk4)
+static int __thiscall
+hooked_read_local_cfg_opt(void *unk1, const char *section, const char *name, int def_val)
 {
-	unsigned __thiscall (*real_fn)(void *, void *, void *, void *) = (void *)0x6ff590;
-	unsigned is_fullscreen = real_fn(unk1, unk2, unk3, unk4);
+	int ret = pw_read_local_cfg_opt(unk1, section, name, def_val);
 
-	if (g_use_borderless) {
-		g_sel_fullscreen = is_fullscreen;
-		/* always return false */
-		return 0;
+	if (strcmp(section, "Video") == 0) {
+		if (strcmp(name, "RenderWid") == 0) {
+			return game_config_get_int(g_profile_idstr, "width", 1366);
+		} else if (strcmp(name, "RenderHei") == 0) {
+			return game_config_get_int(g_profile_idstr, "height", 768);
+		} else if (strcmp(name, "FullScreen") == 0) {
+			if (g_use_borderless) {
+				return 0;
+			} else {
+				return game_config_get_int(g_profile_idstr, "fullscreen", 0);
+			}
+		}
 	}
 
-	return is_fullscreen;
+	return ret;
 }
 
-static unsigned __stdcall
-save_fullscreen_opt(void *unk1, void *unk2, unsigned is_fullscreen)
+static bool __thiscall
+hooked_save_local_cfg_opt(void *unk1, const char *section, const char *name, int val)
 {
-	unsigned __stdcall (*real_fn)(void *, void *, unsigned) = (void *)0x6ff810;
+	bool ret = pw_save_local_cfg_opt(unk1, section, name, val);
 
-	return real_fn(unk1, unk2, g_fullscreen);
+	if (strcmp(name, "RenderWid") == 0) {
+		return game_config_set_int(g_profile_idstr, "width", val);
+	} else if (strcmp(name, "RenderHei") == 0) {
+		return game_config_set_int(g_profile_idstr, "height", val);
+	} else if (strcmp(name, "FullScreen") == 0) {
+		if (g_use_borderless) {
+			val = g_fullscreen;
+		}
+		return game_config_set_int(g_profile_idstr, "fullscreen", val);
+	}
+	return ret;
 }
 
 static wchar_t g_win_title[128];
@@ -386,6 +410,13 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 	}
 
 	switch(event) {
+	case WM_SYSKEYDOWN:
+		if (data == VK_RETURN) {
+			if (g_use_borderless) {
+				set_borderless_fullscreen(!g_fullscreen);
+			}
+		}
+		break;
 	case WM_KEYDOWN:
 		if (data == VK_TAB) {
 			select_closest_mob();
@@ -540,6 +571,8 @@ hooked_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int 
 	pw_add_chat_message(cecgamerun, str, channel, player_id, name, unk, emote);
 }
 
+static void parse_cmdline(void);
+
 static unsigned __thiscall
 hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 {
@@ -643,9 +676,6 @@ append_crash_info_cb(char *buf, size_t bufsize, void *parent_hwnd, void *ctx)
 
 	g_replace_font = false;
 	*(HWND *)parent_hwnd = g_window;
-
-	buf_off += snprintf(buf + buf_off, bufsize - buf_off, "\r\n\r\ngame.cfg:\r\n");
-	buf_off += game_config_dump(buf + buf_off, bufsize - buf_off);
 
 	return buf_off;
 }
@@ -942,12 +972,142 @@ void *dlg;
 	return ret;
 }
 
+static bool
+hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
+{
+	int rc;
+	int styles;
+
+	int x = game_config_get_int(g_profile_idstr, "x", -1);
+	int y = game_config_get_int(g_profile_idstr, "y", -1);
+	int w = game_config_get_int(g_profile_idstr, "width", -1);
+	int h = game_config_get_int(g_profile_idstr, "height", -1);
+	g_fullscreen = game_config_get_int(g_profile_idstr, "fullscreen", 0);
+	if (w == -1 && h == -1) {
+		w = *(int *)0x927d82;
+		h = *(int *)0x927d86;
+	} else {
+		*(int *)0x927d82 = w;
+		*(int *)0x927d86 = h;
+	}
+
+	if (g_fullscreen && g_use_borderless) {
+		styles = 0x80000000;
+	} else {
+		styles = 0x80ce0000;
+	}
+
+
+	if (!g_fullscreen) {
+		RECT rect = { 0, 0, w, h };
+		AdjustWindowRect(&rect, styles, false);
+
+		w = rect.right - rect.left;
+		h = rect.bottom - rect.top;
+		if (x == -1 && y == -1) {
+			x = (GetSystemMetrics(SM_CXFULLSCREEN) - w) / 2;
+			y = (GetSystemMetrics(SM_CYFULLSCREEN) - h) / 2;
+		}
+	} else if (x == -1 && y == -1) {
+		x = 0;
+		y = 0;
+	}
+
+	g_window_size.x = x;
+	g_window_size.y = y;
+	g_window_size.w = w;
+	g_window_size.h = h;
+
+	g_window = CreateWindowEx(0, "ElementClient Window", "PW Mirage", styles,
+			x, y, w, h, NULL, NULL, hinstance, NULL);
+	if (!g_window) {
+		return false;
+	}
+
+	if (g_use_borderless && g_fullscreen) {
+		patch_mem_u32(0x40beb5, 0x80000000);
+		patch_mem_u32(0x40beac, 0x80000000);
+	}
+
+	/* hook into PW input handling */
+	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
+	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
+
+	/* used by PW */
+	*(HINSTANCE *)0x927f5c = hinstance;
+	*(HWND *)(uintptr_t)0x927f60 = g_window;
+
+	ShowWindow(g_window, SW_SHOW);
+	UpdateWindow(g_window);
+	SetForegroundWindow(g_window);
+
+	/* force the window into foreground */
+	DWORD d = 0;
+	DWORD windowThreadProcessId = GetWindowThreadProcessId(GetForegroundWindow(), &d);
+	DWORD currentThreadId = GetCurrentThreadId();
+	AttachThreadInput(windowThreadProcessId, currentThreadId, true);
+	BringWindowToTop(g_window);
+	ShowWindow(g_window, SW_SHOW);
+	AttachThreadInput(windowThreadProcessId,currentThreadId, false);
+
+	return true;
+}
+
+static void
+parse_cmdline(void)
+{
+	char cmdline[256];
+	char *word, *c;
+	char *params[32];
+	int argc = 0;
+	size_t len;
+	int i, rc;
+
+	snprintf(cmdline, sizeof(cmdline), "%s", GetCommandLine());
+
+	word = c = cmdline;
+	while (*c) {
+		if (*c == ' ' || *c == '=') {
+			*c = 0;
+			if (*word) {
+				params[argc++] = word;
+			}
+			word = c + 1;
+		}
+		c++;
+	}
+
+	if (word) {
+		params[argc++] = word;
+	}
+
+	char **a = params;
+	while (argc > 0) {
+		if (argc >= 2 && (strcmp(*a, "-p") == 0 || strcmp(*a, "--profile") == 0)) {
+			g_profile_id = atoi(*(a + 1));
+			a++;
+			argc--;
+		}
+
+		a++;
+		argc--;
+	}
+
+	if (g_profile_id == -1) {
+		g_profile_id = 1;
+	}
+	snprintf(g_profile_idstr, sizeof(g_profile_idstr), "Profile %d", g_profile_id);
+
+}
+
 static int
 init_hooks(void)
 {
 	int rc;
 
 	setup_crash_handler(append_crash_info_cb, NULL);
+
+	parse_cmdline();
 
 	/* find and init some game data */
 	rc = game_config_parse("..\\patcher\\game.cfg");
@@ -974,11 +1134,16 @@ init_hooks(void)
 	set_pw_version();
 
 	d3d_init_settings(D3D_INIT_SETTINGS_INITIAL);
+	g_fullscreen = game_config_get_int(g_profile_idstr, "fullscreen", 0);
+
+	/* hook into window creation (before it's actually created */
+	patch_jmp32(0x43aec8, (uintptr_t)hooked_init_window);
 
 	/* don't let the game reset GWL_EXSTYLE to 0 */
 	patch_mem(0x40bf43, "\x81\xc4\x0c\x00\x00\x00", 6);
 
-	patch_jmp32(0x40b257, (uintptr_t)read_fullscreen_opt);
+	trampoline_fn((void **)&pw_read_local_cfg_opt, 5, hooked_read_local_cfg_opt);
+	trampoline_fn((void **)&pw_save_local_cfg_opt, 8, hooked_save_local_cfg_opt);
 	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
 
 	/* hook into exit */
@@ -989,7 +1154,7 @@ init_hooks(void)
 	patch_mem(0x417aba, "\xe9", 1);
 	patch_jmp32(0x417aba, (uintptr_t)hooked_exception_handler);
 
-	if (game_config_get("custom_tag_font", "0")[0] == '1') {
+	if (game_config_get_int("Global", "custom_tag_font", 0)) {
 		HMODULE gdi_full_h = GetModuleHandle("gdi32full.dll");
 		if (!gdi_full_h) {
 			gdi_full_h = GetModuleHandle("gdi32.dll");
@@ -999,7 +1164,6 @@ init_hooks(void)
 		trampoline_winapi_fn((void **)&org_CreateFontIndirectExW, (void *)hooked_CreateFontIndirectExW);
 	}
 
-	patch_jmp32(0x40b842, (uintptr_t)save_fullscreen_opt);
 	patch_jmp32(0x55006d, (uintptr_t)on_ui_change);
 	patch_jmp32(0x6e099b, (uintptr_t)on_combo_change);
 	patch_jmp32(0x4faea2, (uintptr_t)setup_fullscreen_combo);
@@ -1130,78 +1294,20 @@ _patch_jmp32_unsafe(uintptr_t addr, uintptr_t fn)
 	patch_mem_u32(addr + 1, fn - addr - 5);
 }
 
-static bool
-hooked_init_window(HINSTANCE hinstance, int do_show, bool is_fullscreen)
+static void * __thiscall
+hooked_open_local_cfg(const char *path)
 {
+	static void * __thiscall (*org_fn)(const char *path) = (void *)0x6fed70;
 	int rc;
-	int styles;
 
 	rc = init_hooks();
 	if (rc != 0) {
-		return false;
+		remove_crash_handler();
+		SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+		*(uint32_t *)0x0 = 42;
 	}
 
-	if (is_fullscreen && g_use_borderless) {
-		styles = 0x80000000;
-	}else {
-		styles = 0x80ce0000;
-	}
-
-
-	int x = 0;
-	int y = 0;
-	int w = *(int *)0x927d82;
-	int h = *(int *)0x927d86;
-
-	if (!is_fullscreen) {
-		RECT rect = { 0, 0, w, h };
-		AdjustWindowRect(&rect, styles, false);
-
-		w = rect.right - rect.left;
-		h = rect.bottom - rect.top;
-		x = (GetSystemMetrics(SM_CXFULLSCREEN) - w) / 2;
-		y = (GetSystemMetrics(SM_CYFULLSCREEN) - h) / 2;
-	}
-
-	g_window_size.x = x;
-	g_window_size.y = y;
-	g_window_size.w = w;
-	g_window_size.h = h;
-
-	g_window = CreateWindowEx(0, "ElementClient Window", "PW Mirage", styles,
-			x, y, w, h, NULL, NULL, hinstance, NULL);
-	if (!g_window) {
-		return false;
-	}
-
-	if (g_use_borderless) {
-		set_borderless_fullscreen(g_use_borderless && is_fullscreen);
-	} else {
-		g_fullscreen = is_fullscreen;
-	}
-
-	/* hook into PW input handling */
-	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
-	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
-
-	/* used by PW */
-	*(HINSTANCE *)0x927f5c = hinstance;
-	*(HWND *)(uintptr_t)0x927f60 = g_window;
-
-	ShowWindow(g_window, SW_SHOW);
-	UpdateWindow(g_window);
-	SetForegroundWindow(g_window);
-
-	/* force the window into foreground */
-	DWORD d = 0;
-	DWORD windowThreadProcessId = GetWindowThreadProcessId(GetForegroundWindow(), &d);
-	DWORD currentThreadId = GetCurrentThreadId();
-	AttachThreadInput(windowThreadProcessId, currentThreadId, true);
-	BringWindowToTop(g_window);
-	ShowWindow(g_window, SW_SHOW);
-	AttachThreadInput(windowThreadProcessId,currentThreadId, false);
-
-	return true;
+	return org_fn(path);
 }
 
 static unsigned __thiscall
@@ -1210,6 +1316,8 @@ hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
 	int rc;
 
 	_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)pw_game_tick);
+
+	g_window = *(HWND *)(uintptr_t)0x927f60;
 
 	rc = init_hooks();
 	if (rc != 0) {
@@ -1230,12 +1338,15 @@ uninit_cb(void *arg1, void *arg2)
 	game_config_save(true);
 
 	pw_log_color(0xDD1100, "PW Hook unloading");
-	if (g_exiting) {
-		/* no need to cleanup anything */
-		return;
+
+	if (g_win_hook) {
+		UnhookWindowsHookEx(g_win_hook);
 	}
 
+	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
+
 	g_unloading = true;
+	d3d_unhook();
 }
 
 BOOL APIENTRY
@@ -1263,23 +1374,19 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		/* enable fseek for > 2GB files */
 		_patch_mem_u32_unsafe(0x85f454, (uintptr_t)hooked_fseek);
 
-		/* hook into window creation (before it's actually created */
-		_patch_jmp32_unsafe(0x43aec8, (uintptr_t)hooked_init_window);
+		/* disable default cmdline parsing */
+		_patch_mem_unsafe(0x43acfb, "\xe8\xc0\x0a\x00\x00", 5);
+
+		/* hook early into cfg file reading (before any window is even opened) */
+		_patch_jmp32_unsafe(0x40b016, (uintptr_t)hooked_open_local_cfg);
 
 		return TRUE;
 	}
 	case DLL_PROCESS_DETACH:
 		pw_ui_thread_sendmsg(uninit_cb, NULL, NULL);
 
-		if (g_win_hook) {
-			UnhookWindowsHookEx(g_win_hook);
-		}
-
-		SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
-
 		if (!g_exiting) {
 			restore_mem();
-			d3d_unhook();
 		}
 
 		return TRUE;

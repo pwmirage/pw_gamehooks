@@ -169,7 +169,7 @@ start_game(void)
 
 	SetCurrentDirectory(PW_GAMEDIR);
 	pw_proc_startup_info.cb = sizeof(STARTUPINFO);
-	result = CreateProcess(NULL, "game.exe game:mpw",
+	result = CreateProcess(NULL, "game.exe --profile=1",
 			NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL,
 			&pw_proc_startup_info, &pw_proc_info);
 	if(!result) {

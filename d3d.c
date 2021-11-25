@@ -161,8 +161,8 @@ try_show_target_hp(void)
 void
 d3d_init_settings(int why)
 {
-	bool show_hp = game_config_get("show_hp_bar", "0")[0] == '1';
-	bool show_mp = game_config_get("show_mp_bar", "0")[0] == '1';
+	bool show_hp = game_config_get_int("Global", "show_hp_bar", 0);
+	bool show_mp = game_config_get_int("Global", "show_mp_bar", 0);
 
 	*(bool *)0x927d97 = !!show_hp;
 	*(bool *)0x927d98 = !!show_mp;
@@ -171,9 +171,9 @@ d3d_init_settings(int why)
 		return;
 	}
 
-	bool render_nofocus = game_config_get("render_nofocus", "0")[0] == '1';
+	bool render_nofocus = game_config_get_int("Global", "render_nofocus", 0);
 	patch_mem(0x42ba47, render_nofocus ? "\xc6\xc0\x01" : "\x0f\x95\xc0", 3);
-	g_use_borderless = game_config_get("borderless_fullscreen", "1")[0] == '1';
+	g_use_borderless = game_config_get_int("Global", "borderless_fullscreen", 1);
 }
 
 static void
@@ -224,25 +224,25 @@ try_show_settings_win(void)
 		igText("All changes are applied immediately");
 		check = *(uint8_t *)0x42ba47 == 0x0f;
 		if (igCheckbox("Freeze window on focus lost", &check)) {
-			game_config_set("render_nofocus", check ? "0" : "1");
+			game_config_set_int("Global", "render_nofocus", !check);
 			changed = true;
 			patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
 		}
 		check = !!*(uint8_t *)0x927d97;
 		if (igCheckbox("Show HP bars above entities", &check)) {
-			game_config_set("show_hp_bar", check ? "1" : "0");
+			game_config_set_int("Global", "show_hp_bar", check);
 			changed = true;
 			*(bool *)0x927d97 = !!check;
 		}
 		check = !!*(uint8_t *)0x927d98;
 		if (igCheckbox("Show MP bars above entities", &check)) {
-			game_config_set("show_mp_bar", check ? "1" : "0");
+			game_config_set_int("Global", "show_mp_bar", check);
 			changed = true;
 			*(bool *)0x927d98 = !!check;
 		}
 		check = g_use_borderless;
 		if (igCheckbox("Force borderless fullscreen", &check)) {
-			game_config_set("borderless_fullscreen", check ? "1" : "0");
+			game_config_set_int("Global", "borderless_fullscreen", check);
 			changed = true;
 			g_use_borderless = check;
 		}
@@ -383,7 +383,7 @@ hooked_a3d_end_scene(void *device_d3d8)
 
 	if (!g_device) {
 		void *device;
-		if (game_config_get("d3d8", "0")[0] == '1') {
+		if (g_d3d_ptrs == &g_d3d8_ptrs) {
 			device = device_d3d8;
 		} else {
 			/* pointer inside d3d8to9 structure */
@@ -440,7 +440,7 @@ hooked_a3d_device_reset(void)
 int
 d3d_hook()
 {
-	if (game_config_get("d3d8", "0")[0] == '1') {
+	if (game_config_get_int("Global", "d3d8", 0)) {
 		g_d3d_ptrs = &g_d3d8_ptrs;
 	} else {
 		g_d3d_ptrs = &g_d3d9_ptrs;
@@ -458,11 +458,6 @@ d3d_hook()
 void
 d3d_unhook(void)
 {
-	if (game_config_get("d3d8", "0")[0] == '1') {
-		/* we can't hook into d3d8 */
-		return;
-	}
-
 	g_d3d_ptrs->shutdown();
 }
 
