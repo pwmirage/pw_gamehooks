@@ -345,6 +345,25 @@ pw_ui_thread_postmsg(mg_callback cb, void *arg1, void *arg2)
 	PostMessage(g_window, MG_CB_MSG, 0, (LPARAM)ctx);
 }
 
+static bool
+is_mouse_over_window(int safe_margin)
+{
+	POINT mouse_pos;
+	RECT win_pos;
+
+	GetWindowRect(g_window, &win_pos);
+	GetCursorPos(&mouse_pos);
+
+	if (mouse_pos.x > win_pos.left + safe_margin &&
+			mouse_pos.x < win_pos.right - safe_margin &&
+			mouse_pos.y > win_pos.top + safe_margin &&
+			mouse_pos.y < win_pos.bottom - safe_margin) {
+		return true;
+	}
+
+	return false;
+}
+
 static LRESULT CALLBACK
 event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
@@ -363,10 +382,27 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 			return TRUE;
 		}
 		break;
-	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
-	case WM_KEYUP:
+	case WM_KEYDOWN:
+		switch (data) {
+			case VK_LWIN:
+			case VK_RWIN:
+				if (g_use_borderless && g_fullscreen &&
+						GetActiveWindow() == g_window &&
+						is_mouse_over_window(5)) {
+					ShowWindow(g_window, SW_MINIMIZE);
+					g_pw_data->is_render_active = false;
+				}
+				break;
+			default:
+				break;
+		}
+		if (d3d_handle_keyboard(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
 	case WM_SYSKEYUP:
+	case WM_KEYUP:
 	case WM_CHAR:
 	case WM_DEVICECHANGE:
 		if (d3d_handle_keyboard(event, data, lparam)) {
@@ -374,6 +410,11 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		}
 		break;
 	case WM_KILLFOCUS:
+		if ((GetAsyncKeyState(VK_MENU) & 0x8000) && g_use_borderless && g_fullscreen &&
+				is_mouse_over_window(5)) {
+			ShowWindow(g_window, SW_MINIMIZE);
+			g_pw_data->is_render_active = false;
+		}
 		break;
 	case WM_SYSCOMMAND:
 		switch (data) {
@@ -410,17 +451,13 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 	}
 
 	switch(event) {
-	case WM_SYSKEYDOWN:
-		if (data == VK_RETURN) {
-			if (g_use_borderless) {
-				set_borderless_fullscreen(!g_fullscreen);
-			}
-		}
-		break;
 	case WM_KEYDOWN:
-		if (data == VK_TAB) {
-			select_closest_mob();
-			return TRUE;
+		switch (data) {
+			case VK_TAB:
+				select_closest_mob();
+				return TRUE;
+			default:
+				break;
 		}
 		break;
 	default:
@@ -431,27 +468,6 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 	return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 }
 
-static HHOOK g_win_hook;
-
-static bool
-is_mouse_over_window(int safe_margin)
-{
-	POINT mouse_pos;
-	RECT win_pos;
-
-	GetWindowRect(g_window, &win_pos);
-	GetCursorPos(&mouse_pos);
-
-	if (mouse_pos.x > win_pos.left + safe_margin &&
-			mouse_pos.x < win_pos.right - safe_margin &&
-			mouse_pos.y > win_pos.top + safe_margin &&
-			mouse_pos.y < win_pos.bottom - safe_margin) {
-		return true;
-	}
-
-	return false;
-}
-
 static void
 check_and_minize_win_cb(void *arg1, void *arg2)
 {
@@ -460,74 +476,6 @@ check_and_minize_win_cb(void *arg1, void *arg2)
 		ShowWindow(g_window, SW_MINIMIZE);
 		g_pw_data->is_render_active = false;
 	}
-}
-
-static int g_alt_tab_press_cnt = 0;
-
-LRESULT __stdcall
-event_ll_handler(int ncode, WPARAM wparam, LPARAM lparam)
-{
-	KBDLLHOOKSTRUCT *event = (void *)(uintptr_t)lparam;
-
-	if (ncode < 0) {
-		return CallNextHookEx(g_win_hook, ncode, wparam, lparam);
-	}
-
-	unsigned key = event->vkCode;
-	switch (wparam) {
-		case WM_SYSKEYDOWN:
-			/* keydown while alt is pressed (incl. alt) */
-			if (key == VK_TAB) {
-				/* wait for both alt and tab to be de-pressed,
-				 * then try minimizing the window */
-				g_alt_tab_press_cnt = 2;
-			}
-			break;
-		case WM_SYSKEYUP:
-			/* keyup while alt is pressed (except the alt itself) */
-			switch(key) {
-				case VK_TAB: {
-					if (--g_alt_tab_press_cnt == 0) {
-						pw_ui_thread_postmsg(check_and_minize_win_cb,
-								NULL, NULL);
-					}
-					break;
-				}
-				default:
-					break;
-			}
-			break;
-		case WM_KEYDOWN:
-			switch (key) {
-				default:
-					break;
-			}
-			break;
-		case WM_KEYUP:
-			switch (key) {
-				case VK_TAB:
-				case VK_LMENU:
-				case VK_RMENU: {
-					if (--g_alt_tab_press_cnt == 0) {
-						pw_ui_thread_postmsg(check_and_minize_win_cb,
-								NULL, NULL);
-					}
-					break;
-				}
-				case VK_LWIN:
-				case VK_RWIN:
-					if (g_use_borderless &&g_fullscreen &&
-							GetActiveWindow() == g_window &&
-							is_mouse_over_window(5)) {
-						ShowWindow(g_window, SW_MINIMIZE);
-						g_pw_data->is_render_active = false;
-					}
-					break;
-			}
-			break;
-	}
-
-	return CallNextHookEx(g_win_hook, ncode, wparam, lparam);
 }
 
 static void
@@ -1031,7 +979,6 @@ hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
-	//g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
 
 	/* used by PW */
 	*(HINSTANCE *)0x927f5c = hinstance;
@@ -1326,7 +1273,6 @@ hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
-//	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
 
 	return pw_game_tick(game, tick_time);
 }
@@ -1338,10 +1284,6 @@ uninit_cb(void *arg1, void *arg2)
 	game_config_save(true);
 
 	pw_log_color(0xDD1100, "PW Hook unloading");
-
-	if (g_win_hook) {
-		UnhookWindowsHookEx(g_win_hook);
-	}
 
 	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
 
