@@ -1031,7 +1031,7 @@ hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
-	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
+	//g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
 
 	/* used by PW */
 	*(HINSTANCE *)0x927f5c = hinstance;
@@ -1326,7 +1326,7 @@ hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
-	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
+//	g_win_hook = SetWindowsHookEx(WH_KEYBOARD_LL, event_ll_handler, NULL, 0);
 
 	return pw_game_tick(game, tick_time);
 }
