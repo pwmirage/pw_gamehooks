@@ -402,6 +402,15 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		}
 		break;
 	case WM_SYSKEYUP:
+		if (data == VK_RETURN) {
+			if (g_use_borderless) {
+				set_borderless_fullscreen(!g_fullscreen);
+			}
+		}
+		if (d3d_handle_keyboard(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
 	case WM_KEYUP:
 	case WM_CHAR:
 	case WM_DEVICECHANGE:
