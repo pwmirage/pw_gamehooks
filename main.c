@@ -869,26 +869,20 @@ hooked_pw_game_tick(struct game_data *game, unsigned tick_time)
 static unsigned __stdcall
 hooked_fixup_item_merging(void *frame)
 {
-	int cmd_last_slot, cmd_slot_amount, last_slot, slot_amount;
-	unsigned ok;
+	register int cmd_slot_amount asm("edi");
+	int pack, cmd_last_slot, last_slot, slot_amount;
+	int ok;
 
-	__asm__(
-		"mov eax, %4;"
-		"push dword ptr [eax + 0x24];"
-		"push dword ptr [eax + 0x20];"
-		"push dword ptr [eax + 0x14];"
-		"mov %0, edi;"
-		"pop %1;"
-		"pop %2;"
-		"pop %3;"
-		: "=r"(cmd_slot_amount), "=r"(cmd_last_slot), "=r"(last_slot), "=r"(slot_amount)
-		: "r"(frame));
+	cmd_last_slot = *(int32_t *)(frame + 0x14);
+	last_slot = *(int32_t *)(frame + 0x20);
+	slot_amount = *(int32_t *)(frame + 0x24);
+	pack = *(int32_t *)(frame + 0x2c);
 
 	ok = cmd_slot_amount == slot_amount && cmd_last_slot == last_slot;
 	if (!ok) {
-		pw_log("re-syncing inv state");
+		pw_log("re-syncing pack %d state", pack);
 		void (*refresh_inv_fn)(char inv_id) = (void *)0x5a85f0;
-		refresh_inv_fn(0);
+		refresh_inv_fn(pack);
 	}
 	return last_slot;
 }
