@@ -104,7 +104,9 @@ struct world_objects {
 };
 
 struct ui_dialog {
-	char unk1[84];
+	char unk[40];
+	char *name;
+	char unk1[40];
 	uint32_t pos_x;
 	uint32_t pos_y;
 };
@@ -176,7 +178,7 @@ static unsigned __thiscall (*pw_can_touch_target)(struct player *player, float t
 static void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465140;
 
 static struct ui_dialog * __thiscall (*pw_get_dialog)(void *ui_manager, const char *name) = (void *)0x6c94b0;
-static void __thiscall * (*pw_dialog_show)(void *dialog, bool do_show, bool is_modal, bool is_active) = (void *)0x6d2e00;
+static void __thiscall * (*pw_dialog_show)(struct ui_dialog *dialog, bool do_show, bool is_modal, bool is_active) = (void *)0x6d2e00;
 static void * __thiscall (*pw_dialog_get_el)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
 static bool  __thiscall (*pw_dialog_on_command)(struct ui_dialog *dialog, const char *command) = (void *)0x6d1c90;
 static int * __thiscall (*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;

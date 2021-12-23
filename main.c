@@ -199,25 +199,24 @@ static bool g_ignore_next_craft_change = false;
 
 /* button clicks / slider changes / etc */
 static unsigned __stdcall
-on_ui_change(const char *ctrl_name, void *parent_win)
+on_ui_change(const char *ctrl_name, struct ui_dialog *dialog)
 {
 	unsigned __stdcall (*real_fn)(const char *, void *) = (void *)0x6c9670;
-	const char *parent_name = *(const char **)(parent_win + 0x28);
 
-	pw_log("ctrl: %s, win: %s\n", ctrl_name, parent_name);
+	pw_log("ctrl: %s, win: %s\n", ctrl_name, dialog->name);
 
-	if (strncmp(parent_name, "Win_Setting", strlen("Win_Setting")) == 0 && strcmp(ctrl_name, "customsetting") == 0) {
+	if (strncmp(dialog->name, "Win_Setting", strlen("Win_Setting")) == 0 && strcmp(ctrl_name, "customsetting") == 0) {
 		g_settings_show = true;
 		return 1;
 	}
 
-	if (strcmp(parent_name, "Win_Produce") == 0 && strncmp(ctrl_name, "set", 3) == 0) {
+	if (strcmp(dialog->name, "Win_Produce") == 0 && strncmp(ctrl_name, "set", 3) == 0) {
 		g_ignore_next_craft_change = true;
 	}
 
-	unsigned ret = real_fn(ctrl_name, parent_win);
+	unsigned ret = real_fn(ctrl_name, dialog);
 
-	if (strcmp(parent_name, "Win_SettingSystem") == 0) {
+	if (strcmp(dialog->name, "Win_SettingSystem") == 0) {
 		if (strcmp(ctrl_name, "default") == 0) {
 			g_sel_fullscreen = false;
 		} else if (strcmp(ctrl_name, "IDCANCEL") == 0) {
@@ -232,6 +231,32 @@ on_ui_change(const char *ctrl_name, void *parent_win)
 		}
 	}
 
+	return ret;
+}
+
+static bool g_in_dialog_layout_load = false;
+
+static void __thiscall
+hooked_on_dialog_show(struct ui_dialog *dialog, bool do_show, bool is_modal, bool is_active)
+{
+	pw_dialog_show(dialog, do_show, is_modal, is_active);
+
+	if (!g_in_dialog_layout_load && do_show && strncmp(dialog->name, "Win_Quickbar", strlen("Win_Quickbar")) == 0) {
+		pw_dialog_on_command(dialog, "new");
+		pw_dialog_on_command(dialog, "new");
+
+	}
+}
+
+static unsigned __thiscall
+hooked_load_dialog_layout(void *ui_manager, void *unk)
+{
+	unsigned __thiscall (*real_fn)(void *ui_manager, void *unk) = (void *)0x6c8b90;
+	unsigned ret;
+
+	g_in_dialog_layout_load = true;
+	ret = real_fn(ui_manager, unk);
+	g_in_dialog_layout_load = false;
 	return ret;
 }
 
@@ -789,7 +814,6 @@ item_desc_avl_wchar_fn(void *el, void *ctx1, void *ctx2)
 	wchar_t *wstr;
 	size_t i, max_chars = entry->len * 1 + 16;
 
-	pw_log("item_desc_avl_wchar_fn: %u -> %s", entry->id, entry->desc);
 	wstr = entry->aux = malloc(max_chars * sizeof(wchar_t));
 	if (!wstr) {
 		assert(false);
@@ -1172,6 +1196,8 @@ init_hooks(void)
 	trampoline_fn((void **)&pw_console_cmd, 6, hooked_pw_console_cmd);
 	trampoline_fn((void **)&pw_on_game_enter, 7, hooked_on_game_enter);
 	trampoline_fn((void **)&pw_on_game_leave, 5, hooked_on_game_leave);
+	trampoline_fn((void **)&pw_dialog_show, 6, hooked_on_dialog_show);
+	patch_jmp32(0x6c822a, (uintptr_t)hooked_load_dialog_layout);
 
 	/* always enable ingame console */
 	patch_mem(0x927cc8, "\x01", 1);
