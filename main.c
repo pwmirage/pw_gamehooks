@@ -479,25 +479,6 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		break;
 	}
 
-	if (!g_pw_data || !g_pw_data->game || g_pw_data->game->logged_in != 2) {
-		/* let the game handle this key */
-		return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
-	}
-
-	switch(event) {
-	case WM_KEYDOWN:
-		switch (data) {
-			case VK_TAB:
-				select_closest_mob();
-				return TRUE;
-			default:
-				break;
-		}
-		break;
-	default:
-		break;
-	}
-
 	/* let the game handle this key */
 	return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 }
@@ -947,6 +928,32 @@ void *dlg;
 	return ret;
 }
 
+static bool __thiscall
+hooked_pw_on_keydown(void *ui_manager, int event, int keycode, unsigned mods)
+{
+	bool is_repeat = mods & 0x40000000;
+
+	switch(event) {
+	case WM_CHAR:
+	case WM_KEYDOWN:
+		switch (keycode) {
+			case VK_TAB:
+				if (event == WM_KEYDOWN && !is_repeat) {
+					select_closest_mob();
+				}
+				return true;
+			default:
+				break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	bool rc = pw_on_keydown(ui_manager, event, keycode, mods);
+	return rc;
+}
+
 static bool
 hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 {
@@ -1228,6 +1235,8 @@ init_hooks(void)
 	/* don't show invalid recipes (tgt item id = 0) */
 	patch_jmp32(0x4ef565, (uintptr_t)hooked_get_recipe_to_display);
 
+	trampoline_fn((void **)&pw_on_keydown, 7, hooked_pw_on_keydown);
+
 	/* show bank slots >= 100 (3 digits) */
 	patch_mem(0x8db72f, "3", 1);
 
@@ -1305,7 +1314,6 @@ hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
 
 	return pw_game_tick(game, tick_time);
 }
-
 
 static void
 uninit_cb(void *arg1, void *arg2)

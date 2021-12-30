@@ -26,6 +26,7 @@
 #define PW_API_H
 
 #include <windows.h>
+#include <tchar.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -137,6 +138,7 @@ extern HMODULE g_game;
 extern HWND g_window;
 
 static struct app_data *g_pw_data = (void *)0x927630;
+static bool __thiscall (*pw_on_keydown)(void *ui_manager, int event, int keycode, unsigned mods) = (void *)0x54f950;
 static void (*pw_select_target)(int id) = (void *)0x5a8080;
 static void (*pw_move)(float *cur_pos, float *cur_pos_unused, int time, float speed, int move_mode, short timestamp) = (void *)0x5a7f70;
 static void (*pw_stop_move)(float *dest_pos, float speed, int move_mode, unsigned dir, short timestamp, int time) = (void *)0x5a8000;
