@@ -25,12 +25,62 @@
 #include "common.h"
 
 #include <stdio.h>
+#include <errno.h>
 #include <windows.h>
 #include <assert.h>
 #include <math.h>
 #include <io.h>
 
 #include "pw_api.h"
+
+void *
+ring_buffer_push(struct ring_buffer *ring, void *data)
+{
+	void **slot = &ring->entries[ring->last_idx++ % ring->size];
+	void *prev = *slot;
+
+	if ((ring->last_idx % ring->size) == (ring->first_idx % ring->size)) {
+		/* we made a loop and will now override the "first" entry", so make
+		 * the second first the new first */
+		ring->first_idx++;
+	}
+
+	*slot = data;
+	return prev;
+}
+
+size_t
+ring_buffer_count(struct ring_buffer *ring)
+{
+	return (ring->last_idx - ring->first_idx) % ring->size;
+}
+
+void *
+ring_buffer_pop(struct ring_buffer *ring)
+{
+	if (ring_buffer_count(ring) == 0) {
+		return NULL;
+	}
+
+	return &ring->entries[ring->last_idx-- % ring->size];
+}
+
+void *
+ring_buffer_peek(struct ring_buffer *ring, int off)
+{
+	/* no wrap-around checks */
+	return ring->entries[(ring->first_idx + off) % ring->size];
+}
+
+struct ring_buffer *
+ring_buffer_alloc(size_t size)
+{
+	struct ring_buffer *ring;
+
+	ring = calloc(1, sizeof(*ring) + sizeof(*ring->entries) * size);
+	ring->size = size;
+	return ring;
+}
 
 struct mem_region_4kb {
 	char data[4096];

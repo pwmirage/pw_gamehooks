@@ -22,12 +22,33 @@
  * THE SOFTWARE.
  */
 
+#include <stddef.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdbool.h>
 
 extern bool g_exiting;
 extern bool g_unloading;
+
+struct ring_buffer {
+    size_t size;
+    size_t first_idx;
+    size_t last_idx;
+    size_t tmp;
+    void *entries[0];
+};
+
+#define RING_BUFFER_FOREACH(ring_p, el_p) \
+	for ((ring_p)->tmp = (ring_p)->first_idx; \
+            ((ring_p)->tmp % (ring_p)->size) != ((ring_p)->last_idx % (ring_p)->size) \
+            && (*(el_p) = (ring_p)->entries[(ring_p)->tmp % (ring_p)->size]); \
+            (ring_p)->tmp++)
+
+void *ring_buffer_push(struct ring_buffer *ring, void *data);
+size_t ring_buffer_count(struct ring_buffer *ring);
+void *ring_buffer_pop(struct ring_buffer *ring);
+void *ring_buffer_peek(struct ring_buffer *ring, int off);
+struct ring_buffer *ring_buffer_alloc(size_t size);
 
 void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
 void patch_mem_u32(uintptr_t addr, uint32_t u32);
