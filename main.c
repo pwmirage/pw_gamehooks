@@ -1416,13 +1416,13 @@ _patch_mem_u32_unsafe(uintptr_t addr, uint32_t u32)
 	} u;
 
 	u.u = u32;
-	patch_mem(addr, u.c, 4);
+	_patch_mem_unsafe(addr, u.c, 4);
 }
 
 static void
 _patch_jmp32_unsafe(uintptr_t addr, uintptr_t fn)
 {
-	patch_mem_u32(addr + 1, fn - addr - 5);
+	_patch_mem_u32_unsafe(addr + 1, fn - addr - 5);
 }
 
 static void * __thiscall
@@ -1466,6 +1466,10 @@ uninit_cb(void *arg1, void *arg2)
 {
 	game_config_save(true);
 
+	if (g_exiting) {
+		return;
+	}
+
 	pw_log_color(0xDD1100, "PW Hook unloading");
 
 	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
@@ -1495,7 +1499,7 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		_patch_mem_unsafe(0x43abd9, "\x83\xc4\x04\x83\xc8\xff", 6);
 
 		/* don't run pwprotector */
-		patch_mem(0x8cfb30, "_", 1);
+		_patch_mem_unsafe(0x8cfb30, "_", 1);
 
 		/* enable fseek for > 2GB files */
 		_patch_mem_u32_unsafe(0x85f454, (uintptr_t)hooked_fseek);
