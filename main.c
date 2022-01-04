@@ -401,6 +401,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 	case WM_XBUTTONUP:
 	case WM_MOUSEWHEEL:
 	case WM_MOUSEHWHEEL:
+	case WM_MOUSEACTIVATE:
 		if (d3d_handle_mouse(event, data, lparam)) {
 			return TRUE;
 		}

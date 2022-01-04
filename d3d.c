@@ -26,6 +26,11 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
+#include <ctype.h>
+#include <tlhelp32.h>
+#include <tchar.h>
+#include <io.h>
 #include <d3d9.h>
 
 #include "common.h"
@@ -879,6 +884,7 @@ d3d_unhook(void)
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+static bool g_mouse_activated = false;
 LRESULT
 d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam)
 {
@@ -887,6 +893,14 @@ d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam)
 	}
 
 	ImGui_ImplWin32_WndProcHandler(g_window, event, data, lparam);
+	if (event == WM_MOUSEACTIVATE) {
+		g_mouse_activated = true;
+	} else if (g_mouse_activated) {
+		igUpdateHoveredWindowAndCaptureFlags();
+		ImGui_ImplWin32_UpdateMousePos();
+		g_mouse_activated = false;
+	}
+
 	return igGetIO()->WantCaptureMouse;
 }
 
