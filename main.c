@@ -237,6 +237,20 @@ static bool g_in_dialog_layout_load = false;
 static void __thiscall
 hooked_on_dialog_show(struct ui_dialog *dialog, bool do_show, bool is_modal, bool is_active)
 {
+	char *n = dialog->name;
+	if (!g_in_dialog_layout_load && (
+			strcmp(n, "WorldMap") == 0 ||
+			strcmp(n, "GuildMap") == 0 ||
+			strcmp(n, "WorldMapTravel") == 0)
+			) {
+		void *con = pw_get_dialog(g_pw_data->game->ui->ui_manager, "Dlg_Console");
+		if (con) {
+			pw_dialog_show(con, do_show, 0, 0);
+			if (do_show) {
+				pw_bring_dialog_to_front(g_pw_data->game->ui->ui_manager, con);
+			}
+		}
+	}
 	pw_dialog_show(dialog, do_show, is_modal, is_active);
 
 	if (!g_in_dialog_layout_load && do_show && strncmp(dialog->name, "Win_Quickbar", strlen("Win_Quickbar")) == 0) {
