@@ -176,8 +176,6 @@ hooked_on_game_enter(struct game_data *game, int world_id, float *player_pos)
 {
 	bool ret = pw_on_game_enter(game, world_id, player_pos);
 
-	pw_populate_console_log();
-
 	/* we don't have player info yet, so defer changing the title */
 	g_reload_title = true;
 	return ret;
@@ -559,35 +557,36 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 	return ret;
 }
 
-static void __thiscall
-hooked_pw_console_cmd(void *ui_manager, wchar_t *msg)
+/* TODO tidy up */
+void
+parse_console_cmd(const char *in, char *out, size_t outlen)
 {
-	wchar_t tmp[512];
 
-	if (msg[0] == 'd' && msg[1] == ' ') {
-		_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd %s", msg + 2);
-		msg = tmp;
-	} else if (msg[0] == 'd' && msg[1] == 'i' && msg[2] == ' ') {
+	if (_strnicmp(in, "d ", 2) == 0) {
+		_snprintf(out, outlen, "d_c2scmd %s", in + 2);
+	} else if (_strnicmp(in, "di ", 3) == 0) {
 		struct pw_idmap_el *node;
 		unsigned pid = 0, id = 0;
 		uint64_t lid;
 		int rc;
 
-		if (msg[3] == '#') {
-			msg[3] = ' ';
+		const char *hash_str = strstr(in, "#");
+		if (hash_str) {
+			in = hash_str + 1;
+		} else {
+			in = in + 3;
 		}
 
-		rc = swscanf(msg + 3, L"%d : %d", &pid, &id);
+		rc = sscanf(in, "%d : %d", &pid, &id);
 		if (rc == 2 && g_elements_map) {
 			lid = (pid > 0 ? 0x80000000 : 0) + 0x100000 * pid + id;
-			_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd 10800 %d", pw_idmap_get_mapping(g_elements_map, lid, 0));
+			_snprintf(out, outlen, "d_c2scmd 10800 %d", pw_idmap_get_mapping(g_elements_map, lid, 0));
 		} else {
-			_snwprintf(tmp, sizeof(tmp) / sizeof(tmp[0]), L"d_c2scmd 10800 %s", msg + 3);
+			_snprintf(out, outlen, "d_c2scmd 10800 %s", in);
 		}
-		msg = tmp;
+	} else {
+		_snprintf(out, outlen, "%s", in);
 	}
-
-	pw_console_cmd(ui_manager, msg);
 }
 
 static void
@@ -935,10 +934,21 @@ hooked_pw_on_keydown(void *ui_manager, int event, int keycode, unsigned mods)
 
 	switch(event) {
 	case WM_CHAR:
+		switch (keycode) {
+			case '~': {
+				if (!is_repeat) {
+					d3d_console_toggle();
+				}
+				return true;
+			}
+			default:
+				break;
+		}
+		break;
 	case WM_KEYDOWN:
 		switch (keycode) {
 			case VK_TAB:
-				if (event == WM_KEYDOWN && !is_repeat) {
+				if (!is_repeat) {
 					select_closest_mob();
 				}
 				return true;
@@ -1327,7 +1337,7 @@ init_hooks(void)
 	patch_mem(0x433e35, "\xeb", 1);
 
 	trampoline_fn((void **)&pw_add_chat_message, 7, hooked_add_chat_message);
-	trampoline_fn((void **)&pw_console_cmd, 6, hooked_pw_console_cmd);
+	//trampoline_fn((void **)&pw_console_cmd, 6, hooked_pw_console_cmd);
 	trampoline_fn((void **)&pw_on_game_enter, 7, hooked_on_game_enter);
 	trampoline_fn((void **)&pw_on_game_leave, 5, hooked_on_game_leave);
 	trampoline_fn((void **)&pw_dialog_show, 6, hooked_on_dialog_show);

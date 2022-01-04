@@ -30,6 +30,7 @@
 #include <assert.h>
 #include <math.h>
 #include <io.h>
+#include <keystone/keystone.h>
 
 #include "pw_api.h"
 

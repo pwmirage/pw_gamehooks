@@ -37,4 +37,8 @@ void d3d_unhook(void);
 LRESULT d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam);
 LRESULT d3d_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
 
+void d3d_console_argb_vprintf(uint32_t argb_color, const char* fmt, va_list args);
+void d3d_console_argb_printf(uint32_t argb_color, const char* fmt, ...);
+void d3d_console_toggle(void);
+
 #endif /* PW_D3D */

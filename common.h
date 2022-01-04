@@ -44,6 +44,12 @@ struct ring_buffer {
             && (*(el_p) = (ring_p)->entries[(ring_p)->tmp % (ring_p)->size]); \
             (ring_p)->tmp++)
 
+#define RING_BUFFER_FOREACH_REVERSE(ring_p, el_p) \
+	for ((ring_p)->tmp = (ring_p)->last_idx - 1; \
+            ((ring_p)->tmp % (ring_p)->size) != (((ring_p)->first_idx - 1) % (ring_p)->size) \
+            && (*(el_p) = (ring_p)->entries[(ring_p)->tmp % (ring_p)->size]); \
+            (ring_p)->tmp--)
+
 void *ring_buffer_push(struct ring_buffer *ring, void *data);
 size_t ring_buffer_count(struct ring_buffer *ring);
 void *ring_buffer_pop(struct ring_buffer *ring);
