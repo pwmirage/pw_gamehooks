@@ -954,6 +954,133 @@ hooked_pw_on_keydown(void *ui_manager, int event, int keycode, unsigned mods)
 	return rc;
 }
 
+static int g_detail_map_size = 800;
+static int g_detail_map_org_size[] = { 800, 600 };
+static int g_detail_map_tgt_size[] = { 800, 600 };
+
+static void __thiscall
+hooked_world_map_dlg_resize(struct ui_dialog *dialog, int *size)
+{
+	int l;
+	int t;
+	int r;
+	int b;
+
+	if (size) {
+		l = size[0];
+		t = size[1];
+		r = size[2];
+		b = size[3];
+	} else {
+		RECT rect;
+		GetClientRect(g_window, &rect);
+		l = rect.left;
+		t = rect.top;
+		r = rect.right;
+		b = rect.bottom;
+	}
+
+	int w = r - l;
+	int h = b - t;
+
+	g_detail_map_org_size[0] = w;
+	g_detail_map_org_size[1] = h;
+
+	if (3 * w > h * 4) {
+		int th = h;
+		int tw = th * 4 / 3;
+		l = 0;
+		r = tw;
+		g_detail_map_size = w;
+		g_detail_map_tgt_size[1] = th;
+		g_detail_map_tgt_size[0] = tw;
+	} else {
+		g_detail_map_size = h;
+		g_detail_map_tgt_size[1] = w * 3 / 4;
+		g_detail_map_tgt_size[0] = w;
+	}
+
+	int newsize[4] = { l, t, r, b };
+	pw_world_map_dlg_resize(dialog, newsize);
+}
+
+static int __stdcall
+hooked_get_detail_map_size(void *stack)
+{
+	int *r = stack + 0x10;
+	int *l = stack + 0x8;
+
+	/* the following code calculates (r - l) over and over, so modify those two */
+	*l = 0;
+	*r = g_detail_map_size;
+
+	return g_detail_map_size * 2;
+}
+
+static int __stdcall
+hooked_on_world_map_click(void *stack)
+{
+	float *x = stack + 0x20;
+	float *y = stack + 0x10;
+
+	pw_log("hooked_on_world_map_click x=%0.4f, y=%0.4f", *x, *y);
+}
+
+TRAMPOLINE(0x50c42b, 6, " \
+		call org; \
+		mov ecx, esp; \
+		pushad; pushfd; \
+		push ecx; \
+		call 0x%x; \
+		popfd; popad;",
+		hooked_on_world_map_click);
+
+struct pos_t {
+	int x, y;
+};
+
+static void __stdcall
+hooked_guild_map_pixel_to_screen(struct pos_t *in, struct pos_t *ret)
+{
+	ret->x = (in->x - 1024 / 2) * g_detail_map_tgt_size[1] / 768 + g_detail_map_org_size[0] / 2;
+	ret->y = (in->y - 1024 / 2) * g_detail_map_tgt_size[1] / 768 + g_detail_map_org_size[1] / 2;
+}
+
+TRAMPOLINE(0x4cb585, 5, " \
+		push ecx; \
+		lea eax, [esp + 0x2c]; \
+		push eax; \
+		call 0x%x; \
+		call org;",
+		hooked_guild_map_pixel_to_screen);
+
+static void __stdcall
+hooked_guild_map_screen_to_pixel(struct pos_t *in, struct pos_t *ret)
+{
+	ret->x = (in->x - g_detail_map_org_size[0] / 2) * 768 / g_detail_map_tgt_size[1] + 1024 / 2;
+	ret->y = (in->y - g_detail_map_org_size[1] / 2) * 768 / g_detail_map_tgt_size[1] + 1024 / 2;
+}
+
+TRAMPOLINE(0x4cb4c3, 6, " \
+		push eax; \
+		push eax; \
+		lea eax, [esp + 0x30]; \
+		push eax; \
+		call 0x%x; \
+		pop eax; \
+		call org;",
+		hooked_guild_map_screen_to_pixel);
+
+static void __thiscall
+hooked_bring_dialog_to_front(void *ui_manager, struct ui_dialog *dialog)
+{
+	if (dialog && dialog->name && strcmp(dialog->name, "Dlg_Console") == 0) {
+		return;
+	}
+
+	pw_bring_dialog_to_front(ui_manager, dialog);
+}
+
 static bool
 hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 {
@@ -1236,6 +1363,12 @@ init_hooks(void)
 	patch_jmp32(0x4ef565, (uintptr_t)hooked_get_recipe_to_display);
 
 	trampoline_fn((void **)&pw_on_keydown, 7, hooked_pw_on_keydown);
+	trampoline_fn((void **)&pw_world_map_dlg_resize, 6, hooked_world_map_dlg_resize);
+
+	patch_mem(0x50bb00, "\x54\xe8\x00\x00\x00\x00\x90\x90\x90\x90\x90\x90\x8b\xce", 14);
+	patch_jmp32(0x50bb00 + 1, (uintptr_t)hooked_get_detail_map_size);
+
+	trampoline_fn((void **)&pw_bring_dialog_to_front, 8, hooked_bring_dialog_to_front);
 
 	/* show bank slots >= 100 (3 digits) */
 	patch_mem(0x8db72f, "3", 1);

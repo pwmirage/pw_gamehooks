@@ -122,6 +122,11 @@ struct game_data {
 	uint32_t logged_in; /* 2 = logged in */
 };
 
+struct ui_manager {
+	char unk1[20];
+	struct ui_dialog *focused_dialog;
+};
+
 struct ui_data {
 	char unk1[8];
 	void *ui_manager;
@@ -139,6 +144,7 @@ extern HWND g_window;
 
 static struct app_data *g_pw_data = (void *)0x927630;
 static bool __thiscall (*pw_on_keydown)(void *ui_manager, int event, int keycode, unsigned mods) = (void *)0x54f950;
+static void __thiscall (*pw_world_map_dlg_resize)(void *map, int *size) = (void *)0x50b950;
 static void (*pw_select_target)(int id) = (void *)0x5a8080;
 static void (*pw_move)(float *cur_pos, float *cur_pos_unused, int time, float speed, int move_mode, short timestamp) = (void *)0x5a7f70;
 static void (*pw_stop_move)(float *dest_pos, float speed, int move_mode, unsigned dir, short timestamp, int time) = (void *)0x5a8000;
@@ -148,6 +154,8 @@ static int __thiscall (*pw_do_cast_skill)(struct player *host_player, int skill_
 static void * __thiscall (*pw_get_skill_by_id)(struct player *host_player, int id, bool unk) = (void *)(0x459e50);
 static void (*pw_normal_attack)(unsigned char pvp_mask) = (void *)0x5a80c0;
 static void __thiscall (*pw_console_log)(void *ui_manager, const wchar_t *msg, unsigned argb_color) = (void *)0x553cc0;
+static void __cdecl (*pw_console_parse_cmd)(const char *cmd) = (void *)0x54b570;
+static void __thiscall (*pw_console_exec_cmd)(void *ui_manager) = (void *)0x54b740;
 static void __thiscall (*pw_console_cmd)(void *ui_manager, const wchar_t *msg) = (void *)0x54b440;
 static int __thiscall (*pw_read_local_cfg_opt)(void *unk1, const char *section, const char *name, int def_val) = (void *)0x6ff590;
 static bool __thiscall (*pw_save_local_cfg_opt)(void *unk1, const char *section, const char *name, int val) = (void *)0x6ff810;
@@ -182,6 +190,10 @@ static void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465
 static struct ui_dialog * __thiscall (*pw_get_dialog)(void *ui_manager, const char *name) = (void *)0x6c94b0;
 static void __thiscall * (*pw_dialog_show)(struct ui_dialog *dialog, bool do_show, bool is_modal, bool is_active) = (void *)0x6d2e00;
 static void * __thiscall (*pw_dialog_get_el)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
+static void __thiscall (*pw_dialog_el_set_pos)(void *this, int x, int y) = (void *)0x6d6b60;
+static void __thiscall (*pw_dialog_el_set_size)(void *this, int w, int h) = (void *)0x6d6e40;
+static void __thiscall (*pw_dialog_el_set_accept_mouse_message)(void *this, bool accept) = (void *)0x6d7430;
+static void __thiscall (*pw_bring_dialog_to_front)(void *ui_manager, struct ui_dialog *dialog) = (void *)0x6c9180;
 static bool  __thiscall (*pw_dialog_on_command)(struct ui_dialog *dialog, const char *command) = (void *)0x6d1c90;
 static int * __thiscall (*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;
 static void __fastcall (*pw_item_add_ext_desc)(void *item) = (void *)0x48da10;
