@@ -94,6 +94,15 @@ struct mem_region_1mb {
 
 struct mem_region_1mb *g_mem_map[4096];
 
+struct trampoline_t {
+    uintptr_t addr;
+    int replaced_bytes;
+    char asm_code[0x1000];
+	struct trampoline_t *next;
+};
+
+static struct trampoline_t *g_static_trampolines;
+
 static void
 backup_page_mem(uintptr_t addr, unsigned len)
 {
@@ -334,6 +343,130 @@ trampoline_winapi_fn(void **orig_fn, void *fn)
 	*orig_fn += 2;
 }
 
+static int
+assemble_trampoline(uintptr_t addr, int replaced_bytes,
+		char *asm_buf, char **out)
+{
+	char *code, *c;
+	unsigned char *tmpcode;
+	int len;
+	DWORD prevprot;
+
+	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
+	code = c = VirtualAlloc(NULL, 0x1000, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (code == NULL) {
+		return -ENOMEM;
+	}
+
+	char *asm_org = strstr(asm_buf, TRAMPOLINE_ORG);
+	if (asm_org != NULL &&
+			(*(asm_org + sizeof(TRAMPOLINE_ORG) - 1) == ';' ||
+			 *(asm_org + sizeof(TRAMPOLINE_ORG) - 1) == 0)) {
+		/* First assemble everything before the org, then copy org, and finally
+		 * assemble the rest  */
+		asm_org[0] = 0;
+		len = assemble_x86((uintptr_t)c, asm_buf, &tmpcode);
+		if (len < 0) {
+			VirtualFree(code, 0x1000, MEM_RELEASE);
+			return len;
+		}
+
+		if (len > 0) {
+			memcpy(c, tmpcode, len);
+			c += len;
+		}
+
+		memcpy(c, (void *)addr, replaced_bytes); /* replaced instructions */
+		c += replaced_bytes;
+
+		asm_buf = asm_org + strlen(TRAMPOLINE_ORG);
+	}
+
+	len = assemble_x86((uintptr_t)c, asm_buf, &tmpcode);
+	if (len < 0) {
+		VirtualFree(code, 0x1000, MEM_RELEASE);
+		return len;
+	}
+
+	memcpy(c, tmpcode, len);
+	c += len;
+
+	char tmp[1024];
+	size_t tmplen = 0;
+	int i, l = c - code;
+
+	*c++ = 0xe9; /* jmp */
+	u32_to_str(c, /* jump back rel addr */
+			addr + replaced_bytes - ((uintptr_t)c - 1) - 5);
+	c += 4;
+
+	VirtualProtect(code, 0x1000, PAGE_EXECUTE_READ, &prevprot);
+	*out = code;
+	return c - code;
+}
+
+void
+trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...)
+{
+	struct trampoline_t *t;
+	va_list args;
+	int rc;
+	char *code;
+	DWORD prevprot;
+	char *c;
+
+	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
+	t = calloc(1, sizeof(*t));
+	if (!t) {
+		MessageBox(NULL, "malloc failed", "Status", MB_OK);
+		assert(false);
+		return;
+	}
+
+	t->addr = addr;
+	t->replaced_bytes = replaced_bytes;
+
+	va_start(args, asm_fmt);
+	vsnprintf(t->asm_code, sizeof(t->asm_code), asm_fmt, args);
+	va_end(args);
+
+	c = t->asm_code;
+	while (*c) {
+		if (*c == '\t') {
+			*c = ' ';
+		}
+		c++;
+	}
+
+	t->next = g_static_trampolines;
+	g_static_trampolines = t;
+}
+
+void
+trampoline_static_init(void)
+{
+	struct trampoline_t *t = g_static_trampolines;
+	char tmp[64];
+
+	while (t) {
+		char *code;
+		size_t tmplen = 0;
+		int len = 0;
+
+		len = assemble_trampoline(t->addr, t->replaced_bytes, t->asm_code, &code);
+		pw_log("patching %d bytes at 0x%x: installed trampoline", len, t->addr);
+
+		/* jump to new code */
+		tmp[0] = 0xe9;
+		u32_to_str(tmp + 1, (uintptr_t)code - t->addr - 5);
+		memset(tmp + 5, 0x90, t->replaced_bytes - 5);
+		patch_mem(t->addr, tmp, t->replaced_bytes);
+
+		free(t);
+		t = t->next;
+	}
+}
+
 void
 restore_mem(void)
 {
@@ -367,8 +500,45 @@ restore_mem(void)
 	}
 }
 
-static void __attribute__((constructor))
+static ks_engine *g_ks_engine;
+static unsigned char *g_ks_buf;
+
+int
+assemble_x86(uint32_t addr, const char *in, unsigned char **out)
+{
+	ks_free(g_ks_buf);
+	g_ks_buf = NULL;
+	size_t size, icount;
+	ks_err rc;
+
+	rc = ks_asm(g_ks_engine, in, addr, &g_ks_buf, &size, &icount);
+	if (rc != KS_ERR_OK)
+	{
+		return -ks_errno(g_ks_engine);
+	}
+
+	*out = g_ks_buf;
+	return size;
+}
+
+void
 common_static_init(void)
 {
+	ks_err err;
+
 	memset(g_nops, 0x90, sizeof(g_nops));
+
+	err = ks_open(KS_ARCH_X86, KS_MODE_32, &g_ks_engine);
+	if (err != KS_ERR_OK)
+	{
+		MessageBox(NULL, "Failed to init ks engine", "Error", MB_OK);
+		assert(false);
+	}
+}
+
+void
+common_static_fini(void)
+{
+    ks_free(g_ks_buf);
+    ks_close(g_ks_engine);
 }

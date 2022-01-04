@@ -1246,6 +1246,8 @@ init_hooks(void)
 	/* auto-confirm WC message box */
 	patch_jmp32(0x4b8ddd, (uintptr_t)hooked_show_world_chat_messagebox);
 
+	trampoline_static_init();
+
 	d3d_hook();
 
 	return 0;
@@ -1336,6 +1338,7 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 	switch (reason) {
 	case DLL_PROCESS_ATTACH: {
 		DisableThreadLibraryCalls(mod);
+		common_static_init();
 
 		const char dll_disable_buf[] = "\x83\xc4\x04\x83\xc8\xff";
 
@@ -1368,6 +1371,7 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 			restore_mem();
 		}
 
+		common_static_fini();
 		return TRUE;
 	default:
 		return FALSE;

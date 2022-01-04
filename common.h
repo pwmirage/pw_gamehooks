@@ -60,3 +60,16 @@ void trampoline_fn(void **orig_fn, unsigned replaced_bytes, void *fn);
 void trampoline_winapi_fn(void **orig_fn, void *fn);
 void u32_to_str(char *buf, uint32_t u32);
 void restore_mem(void);
+int assemble_x86(uint32_t addr, const char *in, unsigned char **out);
+
+void common_static_init(void);
+void common_static_fini(void);
+
+void trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *code, ...);
+void trampoline_static_init(void);
+
+#define TRAMPOLINE_ORG "call org"
+#define TRAMPOLINE(addr_p, replaced_bytes_p, ...) \
+static void __attribute__((constructor)) init_trampoline_ ## addr_p(void) { \
+    trampoline_static_add(addr_p, replaced_bytes_p, __VA_ARGS__); \
+}
