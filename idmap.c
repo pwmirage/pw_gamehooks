@@ -136,7 +136,7 @@ pw_idmap_init(const char *name, const char *filename, int can_set)
 
 		fread(entry, 1, sizeof(*entry), fp);
 
-		pw_log("%s: lid=0x%llx, id=%u\n", map->name, entry->lid, entry->id);
+		//pw_log("%s: lid=0x%llx, id=%u\n", map->name, entry->lid, entry->id);
 		pw_avl_insert(map->lid_mappings, entry->lid, entry);
 		pw_avl_insert(map->id_mappings, entry->id, id_entry);
 
@@ -224,7 +224,7 @@ pw_idmap_get_async(struct pw_idmap *map, long long lid, long type, pw_idmap_asyn
 		return 0;
 	}
 
-	pw_log("setting async mapping at lid=0x%llx\n", lid);
+	//pw_log("setting async mapping at lid=0x%llx\n", lid);
 
 	async_el = calloc(1, sizeof(*async_el));
 	if (!async_el) {
@@ -385,7 +385,7 @@ idmap_save_cb(void *_node, void *ctx1, void *ctx2)
 	FILE *fp = ctx1;
 	struct pw_idmap *map = ctx2;
 
-	pw_log("%s: lid=0x%llx, id=%u\n", map->name, entry->lid, entry->id);
+	//pw_log("%s: lid=0x%llx, id=%u\n", map->name, entry->lid, entry->id);
 	fwrite(entry, 1, sizeof(*entry), fp);
 }
 
