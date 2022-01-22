@@ -189,12 +189,15 @@ static void __thiscall (*pw_on_touch)(void *unk1, unsigned unk2) = (void *)0x465
 
 static struct ui_dialog * __thiscall (*pw_get_dialog)(void *ui_manager, const char *name) = (void *)0x6c94b0;
 static void __thiscall * (*pw_dialog_show)(struct ui_dialog *dialog, bool do_show, bool is_modal, bool is_active) = (void *)0x6d2e00;
-static void * __thiscall (*pw_dialog_get_el)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
+static struct ui_dialog_el * __thiscall (*pw_dialog_get_el)(struct ui_dialog *dialog, const char *name) = (void *)0x6d4550;
+static void __thiscall (*pw_dialog_change_focus)(struct ui_dialog *dialog, void *el) = (void *)0x6d44f0;
 static void __thiscall (*pw_dialog_el_set_pos)(void *this, int x, int y) = (void *)0x6d6b60;
 static void __thiscall (*pw_dialog_el_set_size)(void *this, int w, int h) = (void *)0x6d6e40;
 static void __thiscall (*pw_dialog_el_set_accept_mouse_message)(void *this, bool accept) = (void *)0x6d7430;
 static void __thiscall (*pw_bring_dialog_to_front)(void *ui_manager, struct ui_dialog *dialog) = (void *)0x6c9180;
 static bool  __thiscall (*pw_dialog_on_command)(struct ui_dialog *dialog, const char *command) = (void *)0x6d1c90;
+static void __thiscall (*pw_dialog_set_can_move)(struct ui_dialog *dialog, bool can_move) = (void *)0x6d5460;
+static bool  __thiscall (*pw_dialog_is_shown)(struct ui_dialog *dialog) = (void *)0x6d2fa0;
 static int * __thiscall (*pw_set_label_text)(void *label, const wchar_t *name) = (void *)0x6d7310;
 static void __fastcall (*pw_item_add_ext_desc)(void *item) = (void *)0x48da10;
 static int * __thiscall (*pw_item_desc_add_wstr)(void *item, wchar_t *wstr) = (void *)0x6f78d0;

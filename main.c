@@ -248,6 +248,7 @@ hooked_on_dialog_show(struct ui_dialog *dialog, bool do_show, bool is_modal, boo
 			pw_dialog_show(con, do_show, 0, 0);
 			if (do_show) {
 				pw_bring_dialog_to_front(g_pw_data->game->ui->ui_manager, con);
+				pw_dialog_set_can_move(con, false);
 			}
 		}
 	}
