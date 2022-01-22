@@ -104,6 +104,15 @@ struct trampoline_t {
 
 static struct trampoline_t *g_static_trampolines;
 
+struct patch_mem_t {
+    uintptr_t addr;
+    int replaced_bytes;
+    char asm_code[0x1000];
+	struct patch_mem_t *next;
+};
+
+static struct patch_mem_t *g_static_patches;
+
 static void
 backup_page_mem(uintptr_t addr, unsigned len)
 {
@@ -413,7 +422,6 @@ trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, .
 	va_list args;
 	int rc;
 	char *code;
-	DWORD prevprot;
 	char *c;
 
 	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
@@ -444,10 +452,73 @@ trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, .
 }
 
 void
-trampoline_static_init(void)
+patch_mem_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...)
+{
+	struct patch_mem_t *t;
+	va_list args;
+	int rc;
+	char *code;
+	char *c;
+
+	t = calloc(1, sizeof(*t));
+	if (!t) {
+		MessageBox(NULL, "malloc failed", "Status", MB_OK);
+		assert(false);
+		return;
+	}
+
+	t->addr = addr;
+	t->replaced_bytes = replaced_bytes;
+
+	va_start(args, asm_fmt);
+	vsnprintf(t->asm_code, sizeof(t->asm_code), asm_fmt, args);
+	va_end(args);
+
+	c = t->asm_code;
+	while (*c) {
+		if (*c == '\t') {
+			*c = ' ';
+		}
+		c++;
+	}
+
+	t->next = g_static_patches;
+	g_static_patches = t;
+}
+
+void
+patch_mem_static_init(void)
 {
 	struct trampoline_t *t = g_static_trampolines;
-	char tmp[64];
+	struct patch_mem_t *p = g_static_patches;
+	char tmp[0x1000];
+
+	while (p) {
+		unsigned char *code;
+		size_t tmplen = 0;
+		int len = 0;
+
+		len = assemble_x86(p->addr, p->asm_code, &code);
+		if (len < 0) {
+			pw_log_color(0xFF0000, "patching %d bytes at 0x%x: can't assemble, invalid instruction", len, p->addr);
+			return;
+		}
+
+		if (len > p->replaced_bytes) {
+			pw_log_color(0xFF0000, "patching %d bytes at 0x%x: assembled code takes %d bytes and doesn't fit (max %d)", len, p->addr, len, p->replaced_bytes);
+			return;
+		}
+		pw_log("patching %d bytes at 0x%x: %s", len, p->addr, p->asm_code);
+
+		memcpy(tmp, code, len);
+		if (len < p->replaced_bytes) {
+			memset(tmp + len, 0x90, p->replaced_bytes - len);
+		}
+		patch_mem(p->addr, tmp, p->replaced_bytes);
+
+		free(p);
+		p = p->next;
+	}
 
 	while (t) {
 		char *code;

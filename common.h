@@ -71,11 +71,31 @@ int assemble_x86(uint32_t addr, const char *in, unsigned char **out);
 void common_static_init(void);
 void common_static_fini(void);
 
-void trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *code, ...);
-void trampoline_static_init(void);
+void trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...);
+void patch_mem_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...);
+void patch_mem_static_init(void);
 
+#define _COMMON_JOIN2(a, b) a ## _ ## b
+#define COMMON_JOIN2(a, b) _COMMON_JOIN2(a, b)
+#define COMMON_UNIQUENAME(str) COMMON_JOIN2(str, __LINE__)
 #define TRAMPOLINE_ORG "call org"
 #define TRAMPOLINE(addr_p, replaced_bytes_p, ...) \
-static void __attribute__((constructor)) init_trampoline_ ## addr_p(void) { \
+static void __attribute__((constructor)) COMMON_UNIQUENAME(init_trampoline_)(void) { \
     trampoline_static_add(addr_p, replaced_bytes_p, __VA_ARGS__); \
+}
+
+#define PATCH_MEM(addr_p, replaced_bytes_p, ...) \
+static void __attribute__((constructor)) COMMON_UNIQUENAME(init_patch_mem_)(void) { \
+    patch_mem_static_add(addr_p, replaced_bytes_p, __VA_ARGS__); \
+}
+
+#define PATCH_JMP32(addr_p, fn_p) \
+static void __attribute__((constructor)) COMMON_UNIQUENAME(init_patch_jmp_)(void) { \
+    char tmp[16]; \
+    if (*(unsigned char *)(uintptr_t)addr_p == 0xe8) { \
+        _snprintf(tmp, sizeof(tmp), "call 0x%x", (uintptr_t)fn_p); \
+    } else { \
+        _snprintf(tmp, sizeof(tmp), "jmp 0x%x", (uintptr_t)fn_p); \
+    } \
+    patch_mem_static_add(addr_p, 5, tmp); \
 }

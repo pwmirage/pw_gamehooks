@@ -1404,7 +1404,7 @@ init_hooks(void)
 	/* auto-confirm WC message box */
 	patch_jmp32(0x4b8ddd, (uintptr_t)hooked_show_world_chat_messagebox);
 
-	trampoline_static_init();
+	patch_mem_static_init();
 
 	d3d_hook();
 
