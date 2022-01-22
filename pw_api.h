@@ -70,7 +70,9 @@ struct player {
 	struct skill *cur_skill;
 	char unk4[908];
 	uint32_t target_id;
-	char unk5[424];
+	char unk5[26];
+	uint8_t is_in_cosmetician;
+	char unk7[397];
 	struct skill *prep_skill;
 };
 
@@ -104,16 +106,24 @@ struct world_objects {
 	struct mob_list *moblist;
 };
 
+struct ui_dialog_el {
+	void **fn_tbl;
+	char unk1[56];
+	int type; /* 4 == text box */
+};
+
 struct ui_dialog {
 	char unk[40];
 	char *name;
 	char unk1[40];
 	uint32_t pos_x;
 	uint32_t pos_y;
+	char unk2[52];
+	struct ui_dialog_el *focused_el;
 };
 
 struct game_data {
-	char unk1[4];
+	void **fn_tbl;
 	struct ui_data *ui;
 	struct world_objects *wobj;
 	char unk2[20];
@@ -125,11 +135,21 @@ struct game_data {
 struct ui_manager {
 	char unk1[20];
 	struct ui_dialog *focused_dialog;
+	char unk1b[500];
+	void *map_manager;
+	char unk2[104];
+	struct ui_dialog *pet_quickbar_dialog;
+	char unk3[132];
+	void *dlg_manager;
+	void *dlg_manager2;
+	void *dlg_manager3;
+	char unk4[524];
+	bool show_ui;
 };
 
 struct ui_data {
 	char unk1[8];
-	void *ui_manager;
+	struct ui_manager *ui_manager;
 };
 
 struct app_data {
@@ -205,6 +225,34 @@ static bool __thiscall (*pw_on_game_enter)(struct game_data *game, int world_id,
 static void __fastcall (*pw_on_game_leave)(void) = (void *)0x42fbb0;
 
 static void __thiscall (*pw_fashion_preview_set_item)(void *fashion_win, void *item, void *slot_el) = (void *)0x4c2d80;
+
+static void __thiscall (*pw_open_character_window)(void *dlg_man, const char *win_name) = (void *)0x501180;
+static void __thiscall (*pw_open_inventory_window)(void *dlg_man, const char *win_name) = (void *)0x501120;
+static void __thiscall (*pw_open_skill_window)(void *dlg_man, const char *win_name) = (void *)0x501200;
+static void __thiscall (*pw_open_action_window)(void *dlg_man2, const char *win_name) = (void *)0x501830;
+static void __thiscall (*pw_open_team_window)(void *dlg_man2, const char *win_name) = (void *)0x501880;
+static void __thiscall (*pw_open_friend_window)(void *dlg_man2, const char *win_name) = (void *)0x5018e0;
+static void __thiscall (*pw_open_pet_window)(void *dlg_man2, const char *win_name) = (void *)0x501800;
+static void __thiscall (*pw_pet_quickbar_command_attack)(struct ui_dialog *quickbar, void *unk) = (void *)0x4f69c0;
+static void __thiscall (*pw_pet_quickbar_command_skill)(struct ui_dialog *quickbar, int unk1, int unk2, struct ui_dialog_el *skill_el) = (void *)0x4f6b30;
+static void __thiscall (*pw_open_shop_window)(void *dlg_man, const char *win_name) = (void *)0x5015c0;
+static void __thiscall (*pw_open_map_window)(void *map_man, const char *win_name) = (void *)0x4e0c10;
+//static void __thiscall (*pw_open__window)(void *dlg_man, const char *win_name) = (void *)0x;
+static void __thiscall (*pw_open_quest_window)(void *dlg_man, const char *win_name) = (void *)0x501260;
+static void __thiscall (*pw_open_faction_window)(void *dlg_man2, const char *win_name) = (void *)0x501910;
+static void __thiscall (*pw_open_help_window)(void *dlg_man3, const char *win_name) = (void *)0x501c50;
+static void __thiscall (*pw_queue_action_raw)(void *unk, int action_id, int param0, int param1, int param2, int param3, int param4, int param5) = (void *)0x433c40;
+void pw_queue_action(int action_id, int param0, int param1, int param2, int param3, int param4, int param5);
+
+/**
+ * @param player host player
+ * @param row 1-3 or 4-6,
+ * 	1 = bottom quickbar row, 3 = top quickbar row
+ * 	4 = bottom alt quickbar row, 6 = top alt quickbar row
+ * @param col 0-9
+ */
+void pw_quickbar_command_skill(int row, int col);
+
 static void * (*pw_alloc_item)(uint32_t id, uint32_t expire_time, uint32_t count, uint32_t id_space) = (void *)0x48cd70;
 static void * (*pw_alloc)(size_t size) = (void *)0x6f5480;
 static void (*pw_free)(void *addr) = (void *)0x6f5490;
