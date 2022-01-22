@@ -1441,9 +1441,9 @@ _patch_jmp32_unsafe(uintptr_t addr, uintptr_t fn)
 }
 
 static void * __thiscall
-hooked_open_local_cfg(const char *path)
+hooked_open_local_cfg(void *unk, const char *path)
 {
-	static void * __thiscall (*org_fn)(const char *path) = (void *)0x6fed70;
+	static void * __thiscall (*org_fn)(void *unk, const char *path) = (void *)0x6fed70;
 	int rc;
 
 	rc = init_hooks();
@@ -1453,7 +1453,7 @@ hooked_open_local_cfg(const char *path)
 		*(uint32_t *)0x0 = 42;
 	}
 
-	return org_fn(path);
+	return org_fn(unk, path);
 }
 
 static unsigned __thiscall
