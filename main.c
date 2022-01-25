@@ -979,19 +979,23 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 	//pw_log("event=%x, keycode=%x, mods=%x", event, keycode, mods);
 	switch(event) {
 	case WM_CHAR:
+		switch (keycode) {
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+			case '8':
+			case '9':
+				pw_quickbar_command_skill(1, keycode - '1');
+				return true;
+			default:
+				break;
+		}
 		if (!is_repeat) {
 			switch (keycode) {
-				case '1':
-				case '2':
-				case '3':
-				case '4':
-				case '5':
-				case '6':
-				case '7':
-				case '8':
-				case '9':
-					pw_quickbar_command_skill(1, keycode - '1');
-					return true;
 				case '~':
 					d3d_console_toggle();
 					return true;
@@ -1028,6 +1032,9 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 					return true;
 				case 'f':
 					pw_open_friend_window(ui_man->dlg_manager2, "wfriend");
+					return true;
+				case 'g':
+					pw_open_faction_window(ui_man->dlg_manager2, "wfaction");
 					return true;
 				case 'p':
 					pw_open_pet_window(ui_man->dlg_manager2, "wpet");
@@ -1091,7 +1098,9 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 				return true;
 			}
 			case 'h': {
-				ui_man->show_ui = !ui_man->show_ui;
+				if (!is_repeat) {
+					ui_man->show_ui = !ui_man->show_ui;
+				}
 			}
 			default:
 				break;
@@ -1133,14 +1142,17 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 				pw_quickbar_command_skill(4, keycode - VK_F1);
 				return true;
 			case VK_F11: {
-				struct ui_dialog *dialog = pw_get_dialog(ui_man, "Win_Camera");
+				struct ui_dialog *dialog;
 
+				if (is_repeat) {
+					break;
+				}
+
+				dialog = pw_get_dialog(ui_man, "Win_Camera");
 				if (!pw_dialog_is_shown(dialog)) {
-					pw_log("opening camera");
 					pw_queue_action(220, 0, 0, 0, 0, 0, 0);
 					pw_dialog_show(dialog, true, false, true);
 				} else {
-					pw_log("closing camera");
 					pw_dialog_show(dialog, false, false, false);
 				}
 
