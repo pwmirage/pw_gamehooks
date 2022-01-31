@@ -633,9 +633,6 @@ try_show_console(void)
 		console_init();
 	}
 
-	igTextWrapped("Enter 'help' for help.");
-	igSeparator();
-
 	// Options menu
 	if (igBeginPopup("Options", 0)) {
 		igCheckbox("Auto-scroll", &g_console.auto_scroll);
@@ -708,6 +705,10 @@ try_show_console(void)
 	igPopStyleVar(1);
 	igEndChild();
 	igSeparator();
+
+	if (igIsWindowAppearing()) {
+		igSetKeyboardFocusHere(0);
+	}
 
 	// Command-line
 	bool reclaim_focus = false;

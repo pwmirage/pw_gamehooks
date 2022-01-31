@@ -402,6 +402,8 @@ is_mouse_over_window(int safe_margin)
 	return false;
 }
 
+extern bool g_show_console;
+
 static LRESULT CALLBACK
 event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
@@ -452,6 +454,19 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		break;
 	case WM_KEYUP:
 	case WM_CHAR:
+		switch (data) {
+			case '~':
+				if (g_show_console) {
+					d3d_console_toggle();
+					return true;
+				}
+			default:
+				break;
+		}
+		if (d3d_handle_keyboard(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
 	case WM_DEVICECHANGE:
 		if (d3d_handle_keyboard(event, data, lparam)) {
 			return TRUE;
@@ -584,6 +599,7 @@ parse_console_cmd(const char *in, char *out, size_t outlen)
 		struct pw_idmap_el *node;
 		unsigned pid = 0, id = 0;
 		uint64_t lid;
+		int count = 1;
 		int rc;
 
 		const char *hash_str = strstr(in, "#");
@@ -593,10 +609,10 @@ parse_console_cmd(const char *in, char *out, size_t outlen)
 			in = in + 3;
 		}
 
-		rc = sscanf(in, "%d : %d", &pid, &id);
-		if (rc == 2 && g_elements_map) {
+		rc = sscanf(in, "%d : %d %d", &pid, &id, &count);
+		if (rc >= 2 && g_elements_map) {
 			lid = (pid > 0 ? 0x80000000 : 0) + 0x100000 * pid + id;
-			_snprintf(out, outlen, "d_c2scmd 10800 %d", pw_idmap_get_mapping(g_elements_map, lid, 0));
+			_snprintf(out, outlen, "d_c2scmd 10800 %d %d", pw_idmap_get_mapping(g_elements_map, lid, 0), count);
 		} else {
 			_snprintf(out, outlen, "d_c2scmd 10800 %s", in);
 		}

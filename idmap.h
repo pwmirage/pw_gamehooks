@@ -28,7 +28,6 @@ struct pw_idmap_el *pw_idmap_get(struct pw_idmap *map, long long lid, long type)
 unsigned pw_idmap_get_mapping(struct pw_idmap *map, long long lid, long type);
 int pw_idmap_get_async(struct pw_idmap *map, long long lid, long type, pw_idmap_async_fn fn, void *fn_ctx);
 struct pw_idmap_el *pw_idmap_set(struct pw_idmap *map, long long lid, long type, void *data);
-void pw_idmap_force_update_mapping(struct pw_idmap *map, long long lid, long type, long id);
 int pw_idmap_save(struct pw_idmap *map, const char *filename);
 
 #endif /* PW_IDMAP_H */
