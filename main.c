@@ -238,6 +238,9 @@ static void __thiscall
 hooked_on_dialog_show(struct ui_dialog *dialog, bool do_show, bool is_modal, bool is_active)
 {
 	char *n = dialog->name;
+	if (do_show && is_active) {
+		//pw_log("%s", n);
+	}
 	if (!g_in_dialog_layout_load && (
 			strcmp(n, "WorldMap") == 0 ||
 			strcmp(n, "GuildMap") == 0 ||
@@ -1174,6 +1177,17 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 
 				return true;
 			}
+			case 'g':
+			case 'G':
+				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000)) {
+					struct ui_dialog *dialog = pw_get_dialog(ui_man, "Win_GMConsole");
+					if (pw_dialog_is_shown(dialog)) {
+						pw_dialog_show(dialog, false, false, false);
+					} else {
+						pw_dialog_show(dialog, true, false, true);
+					}
+				}
+				return true;
 			default:
 				break;
 		}
