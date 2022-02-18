@@ -7,8 +7,10 @@ $(shell mkdir -p build &>/dev/null)
 
 all: build/gamehook.dll
 
+.PHONY: daemon
+
 clean:
-	rm -f $(OBJECTS:%.o=build/%.o) $(OBJECTS:%.o=build/%.d)
+	rm -f $(OBJECTS:%.o=build/%.o) $(OBJECTS:%.o=build/%.d) $(LIB_OBJECTS:%.o=build/%.o) $(LIB_OBJECTS:%.o=build/%.d) build/libgamehook.dll build/gamehook.dll
 
 build/gamehook.dll: $(OBJECTS:%.o=build/%.o) build/libgamehook.dll
 	gcc $(CFLAGS) -o $@ -shared -fPIC $(filter %.o,$^) -Wl,--subsystem,windows -Wl,-Bstatic -lgdi32 -ld3d9 -ld3d8 -Wl,-Bdynamic -lkeystone build/libgamehook.dll -static-libgcc
@@ -25,9 +27,8 @@ build/%.o: %.c
 build/gamehook_rc.o: gamehook.rc
 	windres -i $< -o $@
 
-# extra daemon for rebuilding the hook remotely
-daemon: daemon.c
-	gcc $(CFLAGS) -o build/gamedaemon.exe $^ -lws2_32
+daemon:
+	$(MAKE) -C daemon
 
 -include $(OBJECTS:%.o=build/%.d)
 -include $(LIB_OBJECTS:%.o=build/%.d)
