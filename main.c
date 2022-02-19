@@ -985,6 +985,8 @@ get_open_world_map_dialog(struct ui_manager *ui_man)
 	return NULL;
 }
 
+extern bool g_disable_all_overlay;
+
 static bool __thiscall
 hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned mods)
 {
@@ -1119,6 +1121,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 			case 'h': {
 				if (!is_repeat) {
 					ui_man->show_ui = !ui_man->show_ui;
+					g_disable_all_overlay = !ui_man->show_ui;
 				}
 			}
 			default:
@@ -1134,7 +1137,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 				if (is_repeat) {
 					break;
 				}
-				
+
 				if (ui_man->focused_dialog && ui_man->focused_dialog->focused_el &&
 						ui_man->focused_dialog->focused_el->type == 4) {
 					/* text field focused */
@@ -1147,7 +1150,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 				pw_bring_dialog_to_front(ui_man, dialog);
 				((void __thiscall (*)(void *, bool)) el->fn_tbl[14])(el, 1);
 				pw_dialog_change_focus(dialog, el);
-				
+
 				return true;
 			}
 			case VK_F1:
@@ -1160,16 +1163,16 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 			case VK_F8:
 				pw_quickbar_command_skill(4, keycode - VK_F1);
 				return true;
-			case VK_F11: {
+			case VK_F9: {
 				struct ui_dialog *dialog;
 
 				if (is_repeat) {
 					break;
 				}
 
+				pw_queue_action(220, 0, 0, 0, 0, 0, 0);
 				dialog = pw_get_dialog(ui_man, "Win_Camera");
 				if (!pw_dialog_is_shown(dialog)) {
-					pw_queue_action(220, 0, 0, 0, 0, 0, 0);
 					pw_dialog_show(dialog, true, false, true);
 				} else {
 					pw_dialog_show(dialog, false, false, false);
@@ -1220,8 +1223,32 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 	return false;
 }
 
-/* disable character rolling on X keypress */
+/* disable hardcoded camera mode on F9 */
+PATCH_MEM(0x4021c4, 5, "jmp 0x4021dc");
+
+/* disable hardcoded character rolling on X keypress */
 PATCH_MEM(0x40227e, 5, "jmp 0x402296");
+
+/* no movement restrictions for camera mode */
+//PATCH_MEM(0x405c1e, 2, "nop; nop");
+/* increase camera movement boundaries (from 11) */
+PATCH_MEM(0x85fc10, 4, ".float 30");
+
+static bool __thiscall
+hooked_pre_screenshot_render(void *this, int unk)
+{
+	bool __thiscall (*org_fn)(void *this, int unk) = (void *)0x431690;
+	bool rc;
+
+	g_disable_all_overlay = !g_pw_data->game->ui->ui_manager->show_ui;
+	rc = org_fn(this, unk);
+	g_disable_all_overlay = false;
+
+	return rc;
+
+}
+
+PATCH_JMP32(0x433e3c, hooked_pre_screenshot_render);
 
 static int g_detail_map_size = 800;
 static int g_detail_map_org_size[] = { 800, 600 };
@@ -1593,7 +1620,7 @@ init_hooks(void)
 	patch_mem(0x492de9, "\x00", 1);
 
 	/* force screenshots via direct3d, not angellica engine */
-	patch_mem(0x433e35, "\xeb", 1);
+	//patch_mem(0x433e35, "\xeb", 1);
 
 	trampoline_fn((void **)&pw_add_chat_message, 7, hooked_add_chat_message);
 	//trampoline_fn((void **)&pw_console_cmd, 6, hooked_pw_console_cmd);

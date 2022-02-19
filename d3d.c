@@ -77,7 +77,8 @@ struct d3d_ptrs *g_d3d_ptrs;
 
 unsigned g_target_dialog_pos_y;
 
-bool g_settings_show;
+bool g_disable_all_overlay = false;
+bool g_settings_show = false;
 bool g_update_show;
 bool g_use_borderless = true;
 
@@ -886,12 +887,14 @@ hooked_a3d_end_scene(void *device_d3d8)
 	ImGui_ImplWin32_NewFrame();
 	igNewFrame();
 
-	try_show_target_hp();
-	try_show_settings_win();
-	try_show_update_win();
-	try_show_console();
+	if (!g_disable_all_overlay) {
+		try_show_target_hp();
+		try_show_settings_win();
+		try_show_update_win();
+		try_show_console();
 
-	//igShowDemoWindow(NULL);
+		//igShowDemoWindow(NULL);
+	}
 
 	igGetIO()->MouseDrawCursor = false;
 
