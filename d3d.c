@@ -38,12 +38,12 @@
 #include "d3d.h"
 #include "game_config.h"
 #include "extlib.h"
+#include "icons_fontawesome.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
 #include "cimgui.h"
 
 static void *g_device = NULL;
-static ImFont *g_font;
 static ImFont *g_font13;
 
 struct d3d_ptrs {
@@ -619,6 +619,8 @@ d3d_console_toggle(void)
 static void
 try_show_console(void)
 {
+	static bool copy_to_clipboard = false;
+
 	if (!g_show_console) {
 		return;
 	}
@@ -633,33 +635,6 @@ try_show_console(void)
 		console_init();
 	}
 
-	// Options menu
-	if (igBeginPopup("Options", 0)) {
-		igCheckbox("Auto-scroll", &g_console.auto_scroll);
-		if (igButton("Scroll bottom", (ImVec2){ 120, 0 })) {
-			g_console.scroll_bottom = true;
-		}
-		igEndPopup();
-	}
-
-	// Options, Filter
-	if (igButton("Options", (ImVec2){ 120, 0 })) {
-		igOpenPopup("Options", 0);
-	}
-
-	igSameLine(0, -1);
-	ImGuiTextFilter_Draw(g_console.filter, "Filter (\"incl,-excl\") (\"error\")", 180);
-
-	igSameLine(0, -1);
-	if (igSmallButton("Clear")) {
-		console_clear();
-	}
-
-	igSameLine(0, -1);
-	bool copy_to_clipboard = igSmallButton("Copy");
-
-	igSeparator();
-
 	// Reserve enough left-over height for 1 separator + 1 input text
 	const float footer_height_to_reserve = igGetStyle()->ItemSpacing.y + igGetFrameHeightWithSpacing();
 	igBeginChildStr("ScrollingRegion", (ImVec2){0, -footer_height_to_reserve}, false, ImGuiWindowFlags_HorizontalScrollbar);
@@ -671,8 +646,9 @@ try_show_console(void)
 	}
 
 	igPushStyleVarVec2(ImGuiStyleVar_ItemSpacing, (ImVec2){4, 1}); // Tighten spacing
-	if (copy_to_clipboard)
+	if (copy_to_clipboard) {
 		igLogToClipboard(-1);
+	}
 
 	struct log_entry *e;
 	RING_BUFFER_FOREACH(g_console.log, &e) {
@@ -695,6 +671,7 @@ try_show_console(void)
 
 	if (copy_to_clipboard) {
 		igLogFinish();
+		copy_to_clipboard = false;
 	}
 
 	if (g_console.scroll_bottom || (g_console.auto_scroll && igGetScrollY() >= igGetScrollMaxY())) {
@@ -706,14 +683,25 @@ try_show_console(void)
 	igEndChild();
 	igSeparator();
 
+	igAlignTextToFramePadding();
+	igText(">");
+	igSameLine(0, -1);
+
 	if (igIsWindowAppearing()) {
 		igSetKeyboardFocusHere(0);
 	}
+	igSameLine(0, -1);
+
+	ImVec2 tmp1, tmp2;
+	igGetWindowContentRegionMax(&tmp2);
+	float window_win = tmp2.x;
+
+	igSetNextItemWidth(window_win - 190);
 
 	// Command-line
 	bool reclaim_focus = false;
 	ImGuiInputTextFlags input_text_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackHistory;
-	if (igInputText("Input", g_console.cmd, sizeof(g_console.cmd), input_text_flags, &console_text_cb, NULL))
+	if (igInputText("Filter:", g_console.cmd, sizeof(g_console.cmd), input_text_flags, &console_text_cb, NULL))
 	{
 		char* s = trim(g_console.cmd);
 		if (*s) {
@@ -722,6 +710,33 @@ try_show_console(void)
 		s[0] = 0;
 		reclaim_focus = true;
 	}
+
+	igSameLine(0, -1);
+
+	ImGuiTextFilter_Draw(g_console.filter, "", 60);
+
+	igSameLine(0, -1);
+
+	// Options menu
+	if (igBeginPopup("Options", 0)) {
+		igCheckbox("Auto-scroll", &g_console.auto_scroll);
+		if (igButton("Scroll bottom", (ImVec2){ 120, 0 })) {
+			g_console.scroll_bottom = true;
+			igCloseCurrentPopup();
+		}
+		if (igButton("Copy", (ImVec2){ 120, 0 })) {
+			copy_to_clipboard = true;
+			igCloseCurrentPopup();
+		}
+		igEndPopup();
+	}
+
+	// Options, Filter
+	if (igButton(ICON_FA_COG, (ImVec2){ 30, 0 })) {
+		igOpenPopup("Options", 0);
+	}
+
+	igSameLine(0, -1);
 
 	// Auto-focus on window apparition
 	igSetItemDefaultFocus();
@@ -734,9 +749,20 @@ try_show_console(void)
 static void
 imgui_init(void)
 {
+	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0};
 	ImGuiIO *io = igGetIO();
-	g_font = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
-	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
+	struct ImFontConfig *config = ImFontConfig_ImFontConfig();
+
+	config->MergeMode = true;
+	config->GlyphMinAdvanceX = 13.0f;
+
+	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
+	ImFontAtlas_AddFontFromFileTTF(io->Fonts, "data/fontawesome-webfont.ttf", 14, config, icon_ranges);
+	ImFontConfig_destroy(config);
+
+
+	//g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
+	//ImFontAtlas_Build(io->Fonts);
 
 	ImGuiStyle *style = igGetStyle();
 
