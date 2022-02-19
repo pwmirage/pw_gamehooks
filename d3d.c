@@ -144,7 +144,7 @@ try_show_target_hp(void)
 	ImVec2 window_pos;
 
 	window_pos.x = g_target_dialog_pos_y + 124 - text_size.x / 2;
-	window_pos.y = -3;
+	window_pos.y = -5;
 
 	igPushFont(g_font13);
 
@@ -181,6 +181,20 @@ d3d_init_settings(int why)
 	g_use_borderless = game_config_get_int("Global", "borderless_fullscreen", 1);
 }
 
+static ImColor
+inl_ImColor_HSVA(float h, float s, float v, float a)
+{
+	ImColor color;
+	ImColor_HSV(&color, h, s, v, a);
+	return color;
+}
+
+static ImColor
+inl_ImColor_HSV(float h, float s, float v)
+{
+	return inl_ImColor_HSVA(h, s, v, 1.0);
+}
+
 static void
 try_show_settings_win(void)
 {
@@ -200,64 +214,77 @@ try_show_settings_win(void)
 
 	window_size.x = 270;
 	window_size.y = 225;
-	igSetNextWindowSize(window_size, ImGuiCond_Always);
+	igSetNextWindowSize(window_size, ImGuiCond_FirstUseEver);
 
-	igPushStyleVarVec2(ImGuiStyleVar_WindowPadding, (ImVec2){ 2, 2 });
-	igPushStyleColorVec4(ImGuiCol_Border, (ImVec4) { 0.70, 0.44, 0.39, 1.00 });
-	igBegin("Extra Settings", &g_settings_show, ImGuiWindowFlags_NoResize |
+	igBegin(ICON_FA_COG "Extra Settings", &g_settings_show,
 			ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
 			ImGuiWindowFlags_NoScrollWithMouse);
-	igPopStyleColor(1);
+
+	igGetWindowContentRegionMax(&window_size);
+
+	igAlignTextToFramePadding();
+	igText("Extra Settings");
+	igSameLine(window_size.x - 22, -1);
+
+	igPushStyleColorVec4(ImGuiCol_Button, inl_ImColor_HSV(0, 0.6f, 0.6f).Value);
+	igPushStyleColorVec4(ImGuiCol_ButtonHovered, inl_ImColor_HSV(0, 0.7f, 0.7f).Value);
+	igPushStyleColorVec4(ImGuiCol_ButtonActive, inl_ImColor_HSV(0, 0.8f, 0.8f).Value);
+	igPushStyleVarVec2(ImGuiStyleVar_FramePadding, (ImVec2){2, 1});
+	if (igButton(ICON_FA_TIMES, (ImVec2){22, 22})) {
+		g_settings_show = false;
+	}
 	igPopStyleVar(1);
+	igPopStyleColor(3);
 
-	{
-		igPushStyleVarFloat(ImGuiStyleVar_ChildRounding, 4.0f);
-		igPushStyleColorVec4(ImGuiCol_Border, (ImVec4){ 0.51, 0.54, 0.58, 1.00 });
-		igBeginChildStr("ChildR", (ImVec2){ 0, window_size.y - 4 }, true, ImGuiWindowFlags_None);
-		igPopStyleColor(1);
-		igPopStyleVar(1);
+	if (igBeginTabBar("MainTabs", ImGuiTabBarFlags_None)) {
+		if (igBeginTabItem("Gameplay", NULL, ImGuiTabBarFlags_None)) {
+				igBeginChildStr("ScrollingRegion", (ImVec2){0, 0}, false,
+								ImGuiWindowFlags_HorizontalScrollbar);
 
-		igAlignTextToFramePadding();
-		igText("Extra Settings");
-		igSameLine(window_size.x - 34, -1);
-		if (igButton("X", (ImVec2){ 22, 22 })) {
-			g_settings_show = false;
-		}
+				igText("All changes are applied immediately");
+				check = *(uint8_t *)0x42ba47 == 0x0f;
+				if (igCheckbox("Freeze window on focus lost", &check)) {
+					game_config_set_int("Global", "render_nofocus", !check);
+					changed = true;
+					patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
+				}
+				check = !!*(uint8_t *)0x927d97;
+				if (igCheckbox("Show HP bars above entities", &check)) {
+					game_config_set_int("Global", "show_hp_bar", check);
+					changed = true;
+					*(bool *)0x927d97 = !!check;
+				}
+				check = !!*(uint8_t *)0x927d98;
+				if (igCheckbox("Show MP bars above entities", &check)) {
+					game_config_set_int("Global", "show_mp_bar", check);
+					changed = true;
+					*(bool *)0x927d98 = !!check;
+				}
+				check = g_use_borderless;
+				if (igCheckbox("Force borderless fullscreen", &check)) {
+					game_config_set_int("Global", "borderless_fullscreen", check);
+					changed = true;
+					g_use_borderless = check;
+				}
 
-		igSeparator();
+				igSameLine(0, -1);
+				show_help_marker("Effective on next fullscreen change");
+				if (igButton("Close", (ImVec2){80, 22})) {
+					g_settings_show = false;
+				}
+				igEndChild();
+				igEndTabItem();
+		}
+		if (igBeginTabItem("Hotkeys", NULL, ImGuiTabBarFlags_None)) {
+			igBeginChildStr("ScrollingRegion", (ImVec2){0, 0}, false,
+							ImGuiWindowFlags_HorizontalScrollbar);
 
-		igText("All changes are applied immediately");
-		check = *(uint8_t *)0x42ba47 == 0x0f;
-		if (igCheckbox("Freeze window on focus lost", &check)) {
-			game_config_set_int("Global", "render_nofocus", !check);
-			changed = true;
-			patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
-		}
-		check = !!*(uint8_t *)0x927d97;
-		if (igCheckbox("Show HP bars above entities", &check)) {
-			game_config_set_int("Global", "show_hp_bar", check);
-			changed = true;
-			*(bool *)0x927d97 = !!check;
-		}
-		check = !!*(uint8_t *)0x927d98;
-		if (igCheckbox("Show MP bars above entities", &check)) {
-			game_config_set_int("Global", "show_mp_bar", check);
-			changed = true;
-			*(bool *)0x927d98 = !!check;
-		}
-		check = g_use_borderless;
-		if (igCheckbox("Force borderless fullscreen", &check)) {
-			game_config_set_int("Global", "borderless_fullscreen", check);
-			changed = true;
-			g_use_borderless = check;
-		}
+			igText("This is the Broccoli tab!\nblah blah blah blah blah");
 
-		igSameLine(0, -1); show_help_marker("Effective on next fullscreen change");
-		if (igButton("Close", (ImVec2){ 80, 22 })) {
-			g_settings_show = false;
+			igEndChild();
+			igEndTabItem();
 		}
-
-		igEndChild();
+		igEndTabBar();
 	}
 
 	igEnd();
@@ -696,7 +723,7 @@ try_show_console(void)
 	igGetWindowContentRegionMax(&tmp2);
 	float window_win = tmp2.x;
 
-	igSetNextItemWidth(window_win - 190);
+	igSetNextItemWidth(window_win - 165);
 
 	// Command-line
 	bool reclaim_focus = false;
@@ -756,65 +783,76 @@ imgui_init(void)
 	config->MergeMode = true;
 	config->GlyphMinAdvanceX = 13.0f;
 
-	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
+	ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
 	ImFontAtlas_AddFontFromFileTTF(io->Fonts, "data/fontawesome-webfont.ttf", 14, config, icon_ranges);
 	ImFontConfig_destroy(config);
 
-
-	//g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
-	//ImFontAtlas_Build(io->Fonts);
+	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
 
 	ImGuiStyle *style = igGetStyle();
+	ImVec4 *colors = style->Colors;
 
-	style->WindowPadding = (ImVec2){ 8, 8 };
-	style->WindowRounding = 5.0f;
-	style->FramePadding = (ImVec2){ 4, 4 };
-	style->FrameRounding = 4.0f;
-	style->FrameBorderSize = 1.0f;
-	style->ItemSpacing = (ImVec2){ 12, 8 };
-	style->ItemInnerSpacing = (ImVec2){ 8, 6 };
-	style->IndentSpacing = 25.0f;
-	style->ScrollbarSize = 15.0f;
-	style->ScrollbarRounding = 9.0f;
-	style->GrabMinSize = 5.0f;
-	style->GrabRounding = 3.0f;
+	colors[ImGuiCol_Text] = (ImVec4){ 0.80f, 0.80f, 0.83f, 1.00f };
+	colors[ImGuiCol_TextDisabled] = (ImVec4){ 0.24f, 0.23f, 0.29f, 1.00f };
+	colors[ImGuiCol_WindowBg] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
+	colors[ImGuiCol_ChildBg] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
+	colors[ImGuiCol_PopupBg] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
+	colors[ImGuiCol_Border] = (ImVec4){ 0.80f, 0.80f, 0.83f, 0.88f };
+	colors[ImGuiCol_BorderShadow] = (ImVec4){ 0.92f, 0.91f, 0.88f, 0.00f };
+	colors[ImGuiCol_FrameBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	colors[ImGuiCol_FrameBgHovered] = (ImVec4){ 0.24f, 0.23f, 0.29f, 1.00f };
+	colors[ImGuiCol_FrameBgActive] = (ImVec4){ 0.18f, 0.18f, 0.20f, 1.00f };
+	colors[ImGuiCol_TitleBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	colors[ImGuiCol_TitleBgCollapsed] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	colors[ImGuiCol_TitleBgActive] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
+	colors[ImGuiCol_MenuBarBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	colors[ImGuiCol_ScrollbarBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	colors[ImGuiCol_SliderGrab] = (ImVec4){ 0.10f, 0.10f, 0.13f, 0.31f };
+	colors[ImGuiCol_SliderGrabActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
+	colors[ImGuiCol_Button] = (ImVec4){ 0.17f, 0.16f, 0.19f, 1.00f };
+	colors[ImGuiCol_ButtonHovered] = (ImVec4){ 0.20f, 0.20f, 0.24f, 1.00f };
+	colors[ImGuiCol_ButtonActive] = (ImVec4){ 0.27f, 0.27f, 0.33f, 1.00f };
+	colors[ImGuiCol_Header] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
+	colors[ImGuiCol_HeaderHovered] = (ImVec4){ 0.21f, 0.20f, 0.23f, 1.00f };
+	colors[ImGuiCol_HeaderActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
+	colors[ImGuiCol_ResizeGrip] = (ImVec4){ 0.00f, 0.00f, 0.00f, 0.00f };
+	colors[ImGuiCol_ResizeGripHovered] = (ImVec4){ 0.56f, 0.56f, 0.58f, 1.00f };
+	colors[ImGuiCol_ResizeGripActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
+	colors[ImGuiCol_PlotLines] = (ImVec4){ 0.40f, 0.39f, 0.38f, 0.63f };
+	colors[ImGuiCol_PlotLinesHovered] = (ImVec4){ 0.25f, 1.00f, 0.00f, 1.00f };
+	colors[ImGuiCol_PlotHistogram] = (ImVec4){ 0.40f, 0.39f, 0.38f, 0.63f };
+	colors[ImGuiCol_PlotHistogramHovered] = (ImVec4){ 0.25f, 1.00f, 0.00f, 1.00f };
+	colors[ImGuiCol_TextSelectedBg] = (ImVec4){ 0.25f, 1.00f, 0.00f, 0.43f };
+	colors[ImGuiCol_ModalWindowDimBg] = (ImVec4){ 1.00f, 0.98f, 0.95f, 0.73f };
+	colors[ImGuiCol_ScrollbarGrab] = (ImVec4){ 0.58f, 0.57f, 0.57f, 0.31f };
+	colors[ImGuiCol_ScrollbarGrabHovered] = (ImVec4){ 0.43f, 0.43f, 0.45f, 1.00f };
+	colors[ImGuiCol_ScrollbarGrabActive] = (ImVec4){ 0.52f, 0.52f, 0.52f, 1.00f };
+	colors[ImGuiCol_CheckMark] = (ImVec4){ 0.38f, 1.00f, 0.00f, 0.31f };
+	colors[ImGuiCol_Tab] = (ImVec4){ 0.18f, 0.17f, 0.19f, 1.00f };
+	colors[ImGuiCol_TabHovered] = (ImVec4){ 0.24f, 0.24f, 0.24f, 1.00f };
+	colors[ImGuiCol_TabActive] = (ImVec4){ 0.30f, 0.30f, 0.30f, 1.00f };
+	colors[ImGuiCol_TabUnfocused] = (ImVec4){ 0.09f, 0.10f, 0.10f, 0.97f };
+	colors[ImGuiCol_TabUnfocusedActive] = (ImVec4){ 0.16f, 0.17f, 0.18f, 1.00f };
+	colors[ImGuiCol_TableRowBgAlt] = (ImVec4){ 0.18f, 0.18f, 0.18f, 0.06f };
 
-	style->Colors[ImGuiCol_Text] = (ImVec4){ 0.80f, 0.80f, 0.83f, 1.00f };
-	style->Colors[ImGuiCol_TextDisabled] = (ImVec4){ 0.34f, 0.33f, 0.39f, 1.00f };
-	style->Colors[ImGuiCol_WindowBg] = (ImVec4){ 0.06f, 0.05f, 0.07f, 0.90f };
-	style->Colors[ImGuiCol_ChildBg] = (ImVec4){ 0.07f, 0.07f, 0.09f, 0.00f };
-	style->Colors[ImGuiCol_PopupBg] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
-	style->Colors[ImGuiCol_Border] = (ImVec4){ 0.70, 0.47, 0.39, 1.00 };
-	style->Colors[ImGuiCol_BorderShadow] = (ImVec4){ 0.92f, 0.91f, 0.88f, 0.00f };
-	style->Colors[ImGuiCol_FrameBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
-	style->Colors[ImGuiCol_FrameBgHovered] = (ImVec4){ 0.18, 0.18f, 0.18f, 1.00f };
-	style->Colors[ImGuiCol_FrameBgActive] = (ImVec4){ 0.24f, 0.23f, 0.29f, 1.00f };
-	style->Colors[ImGuiCol_TitleBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
-	style->Colors[ImGuiCol_TitleBgCollapsed] = (ImVec4){ 0.12f, 0.12f, 0.12f, 1.00f };
-	style->Colors[ImGuiCol_TitleBgActive] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
-	style->Colors[ImGuiCol_MenuBarBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
-	style->Colors[ImGuiCol_ScrollbarBg] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
-	style->Colors[ImGuiCol_ScrollbarGrab] = (ImVec4){ 0.80f, 0.80f, 0.83f, 0.31f };
-	style->Colors[ImGuiCol_ScrollbarGrabHovered] = (ImVec4){ 0.56f, 0.56f, 0.58f, 1.00f };
-	style->Colors[ImGuiCol_ScrollbarGrabActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
-	style->Colors[ImGuiCol_CheckMark] = (ImVec4){ 0.40f, 1.00f, 0.00f, 1.00f };
-	style->Colors[ImGuiCol_SliderGrab] = (ImVec4){ 0.80f, 0.80f, 0.83f, 0.31f };
-	style->Colors[ImGuiCol_SliderGrabActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
-	style->Colors[ImGuiCol_Button] = (ImVec4){ 0.26f, 0.17f, 0.18f, 1.00f };
-	style->Colors[ImGuiCol_ButtonHovered] = (ImVec4){ 0.33f, 0.15f, 0.13f, 1.00f };
-	style->Colors[ImGuiCol_ButtonActive] = (ImVec4){ 0.37f, 0.15f, 0.13f, 1.00f };
-	style->Colors[ImGuiCol_Header] = (ImVec4){ 0.10f, 0.09f, 0.12f, 1.00f };
-	style->Colors[ImGuiCol_HeaderHovered] = (ImVec4){ 0.56f, 0.56f, 0.58f, 1.00f };
-	style->Colors[ImGuiCol_HeaderActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
-	style->Colors[ImGuiCol_ResizeGrip] = (ImVec4){ 0.00f, 0.00f, 0.00f, 0.00f };
-	style->Colors[ImGuiCol_ResizeGripHovered] = (ImVec4){ 0.56f, 0.56f, 0.58f, 1.00f };
-	style->Colors[ImGuiCol_ResizeGripActive] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
-	style->Colors[ImGuiCol_PlotLines] = (ImVec4){ 0.40f, 0.39f, 0.38f, 0.63f };
-	style->Colors[ImGuiCol_PlotLinesHovered] = (ImVec4){ 0.25f, 1.00f, 0.00f, 1.00f };
-	style->Colors[ImGuiCol_PlotHistogram] = (ImVec4){ 0.40f, 0.39f, 0.38f, 0.63f };
-	style->Colors[ImGuiCol_PlotHistogramHovered] = (ImVec4){ 0.25f, 1.00f, 0.00f, 1.00f };
-	style->Colors[ImGuiCol_TextSelectedBg] = (ImVec4){ 0.25f, 1.00f, 0.00f, 0.43f };
-	style->Colors[ImGuiCol_ModalWindowDimBg] = (ImVec4){ 1.00f, 0.98f, 0.95f, 0.73f };
+	style->PopupRounding = 3;
+
+	style->WindowPadding = (ImVec2){ 10, 10 };
+	style->FramePadding  = (ImVec2){ 6, 4 };
+	style->ItemSpacing   = (ImVec2){ 6, 5 };
+
+	style->ScrollbarSize = 18;
+
+	style->WindowBorderSize = 1;
+	style->ChildBorderSize  = 1;
+	style->PopupBorderSize  = 1;
+	style->FrameBorderSize  = 0;
+
+	style->WindowRounding    = 3;
+	style->ChildRounding     = 3;
+	style->FrameRounding     = 3;
+	style->ScrollbarRounding = 2;
+	style->GrabRounding      = 3;
 }
 
 
