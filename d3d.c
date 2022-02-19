@@ -784,11 +784,11 @@ imgui_init(void)
 	config->MergeMode = true;
 	config->GlyphMinAdvanceX = 13.0f;
 
-	ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 14, NULL, NULL);
+	ImFontAtlas_AddFontFromFileTTF(io->Fonts, "data/calibrib.ttf", 14, NULL, NULL);
 	ImFontAtlas_AddFontFromFileTTF(io->Fonts, "data/fontawesome-webfont.ttf", 14, config, icon_ranges);
 	ImFontConfig_destroy(config);
 
-	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "fonts/calibrib.ttf", 12, NULL, NULL);
+	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "data/calibrib.ttf", 12, NULL, NULL);
 
 	ImGuiStyle *style = igGetStyle();
 	ImVec4 *colors = style->Colors;
