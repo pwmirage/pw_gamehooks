@@ -95,16 +95,14 @@ struct mem_region_1mb {
 
 struct mem_region_1mb *g_mem_map[4096];
 
-struct trampoline_t {
-    uintptr_t addr;
-    int replaced_bytes;
-    char asm_code[0x1000];
-	struct trampoline_t *next;
+enum patch_mem_type {
+	PATCH_MEM_T_RAW,
+	PATCH_MEM_T_TRAMPOLINE,
+	PATCH_MEM_T_TRAMPOLINE_FN
 };
 
-static struct trampoline_t *g_static_trampolines;
-
 struct patch_mem_t {
+	enum patch_mem_type type;
     uintptr_t addr;
     int replaced_bytes;
     char asm_code[0x1000];
@@ -355,9 +353,9 @@ trampoline_winapi_fn(void **orig_fn, void *fn)
 
 static int
 assemble_trampoline(uintptr_t addr, int replaced_bytes,
-		char *asm_buf, char **out)
+		char *asm_buf, unsigned char **out)
 {
-	char *code, *c;
+	unsigned char *code, *c;
 	unsigned char *tmpcode;
 	int len;
 	DWORD prevprot;
@@ -416,9 +414,9 @@ assemble_trampoline(uintptr_t addr, int replaced_bytes,
 }
 
 void
-trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...)
+trampoline_fn_static_add(void **orig_fn, int replaced_bytes, void *fn)
 {
-	struct trampoline_t *t;
+	struct patch_mem_t *t;
 	va_list args;
 	int rc;
 	char *code;
@@ -432,27 +430,17 @@ trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, .
 		return;
 	}
 
-	t->addr = addr;
+	t->type = PATCH_MEM_T_TRAMPOLINE_FN;
+	t->addr = (uintptr_t)(void *)orig_fn;
 	t->replaced_bytes = replaced_bytes;
+	*(void **)t->asm_code = fn;
 
-	va_start(args, asm_fmt);
-	vsnprintf(t->asm_code, sizeof(t->asm_code), asm_fmt, args);
-	va_end(args);
-
-	c = t->asm_code;
-	while (*c) {
-		if (*c == '\t') {
-			*c = ' ';
-		}
-		c++;
-	}
-
-	t->next = g_static_trampolines;
-	g_static_trampolines = t;
+	t->next = g_static_patches;
+	g_static_patches = t;
 }
 
 void
-patch_mem_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...)
+trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...)
 {
 	struct patch_mem_t *t;
 	va_list args;
@@ -460,6 +448,7 @@ patch_mem_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ..
 	char *code;
 	char *c;
 
+	assert(replaced_bytes >= 5 && replaced_bytes <= 64);
 	t = calloc(1, sizeof(*t));
 	if (!t) {
 		MessageBox(NULL, "malloc failed", "Status", MB_OK);
@@ -467,6 +456,7 @@ patch_mem_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ..
 		return;
 	}
 
+	t->type = PATCH_MEM_T_TRAMPOLINE;
 	t->addr = addr;
 	t->replaced_bytes = replaced_bytes;
 
@@ -487,17 +477,51 @@ patch_mem_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ..
 }
 
 void
-patch_mem_static_init(void)
+patch_mem_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...)
 {
-	struct trampoline_t *t = g_static_trampolines;
-	struct patch_mem_t *p = g_static_patches;
+	struct patch_mem_t *t;
+	va_list args;
+	int rc;
+	char *code;
+	char *c;
+
+	t = calloc(1, sizeof(*t));
+	if (!t) {
+		MessageBox(NULL, "malloc failed", "Status", MB_OK);
+		assert(false);
+		return;
+	}
+
+	t->type = PATCH_MEM_T_RAW;
+	t->addr = addr;
+	t->replaced_bytes = replaced_bytes;
+
+	va_start(args, asm_fmt);
+	vsnprintf(t->asm_code, sizeof(t->asm_code), asm_fmt, args);
+	va_end(args);
+
+	c = t->asm_code;
+	while (*c) {
+		if (*c == '\t') {
+			*c = ' ';
+		}
+		c++;
+	}
+
+	t->next = g_static_patches;
+	g_static_patches = t;
+}
+
+static void
+process_static_patch_mem(struct patch_mem_t *p)
+{
 	char tmp[0x1000];
+	unsigned char *code;
+	size_t tmplen = 0;
+	int len = 0;
 
-	while (p) {
-		unsigned char *code;
-		size_t tmplen = 0;
-		int len = 0;
-
+	switch(p->type) {
+	case PATCH_MEM_T_RAW: {
 		len = assemble_x86(p->addr, p->asm_code, &code);
 		if (len < 0) {
 			pw_log_color(0xFF0000, "patching %d bytes at 0x%x: can't assemble, invalid instruction", len, p->addr);
@@ -515,27 +539,36 @@ patch_mem_static_init(void)
 			memset(tmp + len, 0x90, p->replaced_bytes - len);
 		}
 		patch_mem(p->addr, tmp, p->replaced_bytes);
-
-		free(p);
-		p = p->next;
+		break;
 	}
-
-	while (t) {
-		char *code;
-		size_t tmplen = 0;
-		int len = 0;
-
-		len = assemble_trampoline(t->addr, t->replaced_bytes, t->asm_code, &code);
-		pw_log("patching %d bytes at 0x%x: installed trampoline", len, t->addr);
+	case PATCH_MEM_T_TRAMPOLINE: {
+		len = assemble_trampoline(p->addr, p->replaced_bytes, p->asm_code, &code);
+		pw_log("patching %d bytes at 0x%x: installed trampoline", len, p->addr);
 
 		/* jump to new code */
 		tmp[0] = 0xe9;
-		u32_to_str(tmp + 1, (uintptr_t)code - t->addr - 5);
-		memset(tmp + 5, 0x90, t->replaced_bytes - 5);
-		patch_mem(t->addr, tmp, t->replaced_bytes);
+		u32_to_str(tmp + 1, (uintptr_t)code - p->addr - 5);
+		memset(tmp + 5, 0x90, p->replaced_bytes - 5);
+		patch_mem(p->addr, tmp, p->replaced_bytes);
+		break;
+	}
+	case PATCH_MEM_T_TRAMPOLINE_FN: {
+		trampoline_fn((void **)p->addr, p->replaced_bytes, *(void **)p->asm_code);
+		pw_log("patching %d bytes at 0x%x: installed fn trampoline", len, p->addr);
+		break;
+	}
+	}
+}
 
-		free(t);
-		t = t->next;
+void
+patch_mem_static_init(void)
+{
+	struct patch_mem_t *p = g_static_patches;
+
+	while (p) {
+		process_static_patch_mem(p);
+		free(p);
+		p = p->next;
 	}
 }
 

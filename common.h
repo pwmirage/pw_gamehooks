@@ -71,6 +71,7 @@ int assemble_x86(uint32_t addr, const char *in, unsigned char **out);
 void common_static_init(void);
 void common_static_fini(void);
 
+void trampoline_fn_static_add(void **orig_fn, int replaced_bytes, void *fn);
 void trampoline_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...);
 void patch_mem_static_add(uintptr_t addr, int replaced_bytes, const char *asm_fmt, ...);
 void patch_mem_static_init(void);
@@ -82,6 +83,11 @@ void patch_mem_static_init(void);
 #define TRAMPOLINE(addr_p, replaced_bytes_p, ...) \
 static void __attribute__((constructor)) COMMON_UNIQUENAME(init_trampoline_)(void) { \
     trampoline_static_add(addr_p, replaced_bytes_p, __VA_ARGS__); \
+}
+
+#define TRAMPOLINE_FN(fn_p, replaced_bytes_p, ...) \
+static void __attribute__((constructor)) COMMON_UNIQUENAME(init_trampoline_)(void) { \
+    trampoline_fn_static_add((void **)fn_p, replaced_bytes_p, __VA_ARGS__); \
 }
 
 #define PATCH_MEM(addr_p, replaced_bytes_p, ...) \
