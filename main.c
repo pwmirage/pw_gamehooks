@@ -411,6 +411,16 @@ static LRESULT CALLBACK
 event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
 	switch(event) {
+	case WM_SIZE:
+		if (data == SIZE_MINIMIZED) {
+			/* PW doesnt react to this message and keeps using CPU, so make it stop */
+			g_pw_data->is_render_active = false;
+			break;
+		} else if (data == SIZE_RESTORED) {
+			g_pw_data->is_render_active = true;
+			break;
+		}
+		break;
 	case WM_LBUTTONDOWN: case WM_LBUTTONDBLCLK:
 	case WM_RBUTTONDOWN: case WM_RBUTTONDBLCLK:
 	case WM_MBUTTONDOWN: case WM_MBUTTONDBLCLK:
