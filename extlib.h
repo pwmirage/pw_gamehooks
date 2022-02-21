@@ -19,4 +19,13 @@ APICALL void setup_crash_handler(crash_handler_cb cb, void *ctx);
 APICALL void remove_crash_handler(void);
 APICALL void handle_crash(void *winapi_exception_info);
 
+struct mem_region {
+    char name[28];
+    uint32_t size;
+    void *data;
+};
+
+APICALL struct mem_region *mem_region_get(const char *name, uint32_t size);
+APICALL void mem_region_free(struct mem_region *mem);
+
 #endif /* PW_GAMEHOOK_EXT_H */
