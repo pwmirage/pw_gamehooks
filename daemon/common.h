@@ -18,6 +18,7 @@
 #include <windows.h>
 #include <winbase.h>
 #include <winsock2.h>
+#include <tlhelp32.h>
 #include <errno.h>
 
 #define MASTER_PORT 61171

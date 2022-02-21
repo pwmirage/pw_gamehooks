@@ -454,6 +454,45 @@ start_debug(int connfd, int port)
 	return 0;
 }
 
+static void
+foreach_thread(DWORD (__attribute__((stdcall)) *cb)(void *))
+{
+	HANDLE h;
+	THREADENTRY32 te;
+
+	h = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (h == INVALID_HANDLE_VALUE) {
+		return;
+	}
+
+	te.dwSize = sizeof(te);
+	if (!Thread32First(h, &te)) {
+		CloseHandle(h);
+		return;
+	}
+
+	do {
+		if (te.dwSize <
+			FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID) + sizeof(te.th32OwnerProcessID)) {
+			continue;
+		}
+
+		if (te.th32OwnerProcessID != g_game_procid) {
+			continue;
+		}
+
+		HANDLE thread = OpenThread(THREAD_ALL_ACCESS, FALSE, te.th32ThreadID);
+		if (thread != NULL) {
+			cb(thread);
+			CloseHandle(thread);
+		}
+
+		te.dwSize = sizeof(te);
+	} while (Thread32Next(h, &te));
+
+	CloseHandle(h);
+}
+
 int
 game_hook(int connfd)
 {
@@ -464,8 +503,10 @@ game_hook(int connfd)
 	if (exit_code != STILL_ACTIVE) {
 		rc = start_game(connfd, false);
 	} else {
+		foreach_thread(SuspendThread);
 		rc = detach_dll(connfd, g_game_procid, g_game_dll);
 		rc = rc || inject(connfd, true);
+		foreach_thread(ResumeThread);
 	}
 
 	return rc;

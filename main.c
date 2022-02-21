@@ -588,7 +588,6 @@ bool g_exiting = false;
 bool g_unloading = false;
 static float g_local_max_move_speed = 25.0f;
 
-static void uninit_cb(void *arg1, void *arg2);
 
 static void
 hooked_exit(void)
@@ -599,7 +598,6 @@ hooked_exit(void)
 
 	/* our hacks sometimes crash on exit, not sure why. they're hacks, so just ignore the errors */
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-	uninit_cb(NULL, NULL);
 }
 
 static size_t
@@ -1411,23 +1409,6 @@ hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
 	return pw_game_tick(game, tick_time);
 }
 
-static void
-uninit_cb(void *arg1, void *arg2)
-{
-	game_config_save(true);
-
-	if (g_exiting) {
-		return;
-	}
-
-	pw_log_color(0xDD1100, "PW Hook unloading");
-
-	SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
-
-	g_unloading = true;
-	d3d_unhook();
-}
-
 BOOL APIENTRY
 DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 {
@@ -1463,7 +1444,16 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		return TRUE;
 	}
 	case DLL_PROCESS_DETACH:
-		pw_ui_thread_sendmsg(uninit_cb, NULL, NULL);
+		if (g_exiting) {
+			return TRUE;
+		}
+
+		pw_log_color(0xDD1100, "PW Hook unloading");
+
+		SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
+
+		g_unloading = true;
+		d3d_unhook();
 
 		if (!g_exiting) {
 			restore_mem();
