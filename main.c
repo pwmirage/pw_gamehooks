@@ -476,8 +476,9 @@ set_pw_version(void)
 	fclose(fp);
 	pw_log_color(0x11FF00, "PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
 
-	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"	   PW Mirage");
-	snwprintf(g_build, sizeof(g_build) / sizeof(wchar_t), L"	  v%d", version);
+	snwprintf(g_build, sizeof(g_build) / sizeof(wchar_t), L"");
+	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"%S", HOOK_BUILD_DATE);
+	g_version[20] = 0;
 
 	patch_mem_u32(0x563c6c, (uintptr_t)g_version);
 	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
@@ -560,15 +561,11 @@ parse_console_cmd(const char *in, char *out, size_t outlen)
 	}
 }
 
-static void
-hooked_pw_get_info_on_acquire(unsigned char inv_id, unsigned char slot_id)
+/* always try to get detailed item info on accquire */
+static void __stdcall
+hooked_pw_get_info_on_acquire(void *stack, unsigned need_info, unsigned char inv_id, unsigned char slot_id)
 {
     unsigned *expire_time;
-    unsigned need_info;
-
-    __asm__(
-            "mov %0, eax;"
-            : "=r"(need_info));
 
     if (need_info) {
         pw_get_item_info(inv_id, slot_id);
@@ -576,7 +573,7 @@ hooked_pw_get_info_on_acquire(unsigned char inv_id, unsigned char slot_id)
     }
 
     /* read the upper frame's stack */
-    expire_time = (unsigned *)(&expire_time + 11);
+    expire_time = (unsigned *)(stack + 0x1c);
     if (*expire_time == 0x631b) {
         /* hooked magic number, this item came from a task and the above time is not valid yet */
         *expire_time = 0;
@@ -584,8 +581,17 @@ hooked_pw_get_info_on_acquire(unsigned char inv_id, unsigned char slot_id)
     }
 }
 
-bool g_exiting = false;
-bool g_unloading = false;
+PATCH_MEM(0x44cdae, 2, "nop; nop;");
+PATCH_MEM(0x44cd41, 2, ".byte 0x1b; .byte 0x63");
+
+TRAMPOLINE(0x44cdb6, 8,
+	"push eax;"
+	"push esp;"
+	"call 0x%x",
+	hooked_pw_get_info_on_acquire);
+
+static bool g_exiting = false;
+static bool g_unloading = false;
 static float g_local_max_move_speed = 25.0f;
 
 
@@ -1295,11 +1301,6 @@ init_hooks(void)
 
 	/* always enable ingame console */
 	patch_mem(0x927cc8, "\x01", 1);
-
-	/* always try to get detailed item info on accquire */
-	patch_mem(0x44cdae, "\x66\x90", 2);
-	patch_mem(0x44cd41, "\x1b\x63", 2);
-	patch_jmp32(0x44cdb6, (uintptr_t)hooked_pw_get_info_on_acquire);
 
 	patch_jmp32(0x471f70, (uintptr_t)hooked_translate3dpos2screen);
 	trampoline_fn((void **)&pw_item_add_ext_desc, 10, hooked_item_add_ext_desc);

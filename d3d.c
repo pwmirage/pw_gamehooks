@@ -26,6 +26,7 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <assert.h>
 #include <ctype.h>
 #include <tlhelp32.h>
@@ -862,10 +863,6 @@ hooked_a3d_end_scene(void *device_d3d8)
 {
 	unsigned __stdcall (*real_end_scene)(PDIRECT3DDEVICE9 device) = *(void **)(*(void **)device_d3d8 + 0x8c);
 
-	if (g_unloading) {
-		return real_end_scene(device_d3d8);
-	}
-
 	if (!g_device) {
 		void *device;
 		if (g_d3d_ptrs == &g_d3d8_ptrs) {
@@ -906,17 +903,10 @@ hooked_a3d_end_scene(void *device_d3d8)
 }
 
 static unsigned __stdcall
-hooked_a3d_device_reset(void)
+hooked_a3d_device_reset(void *unk1, void *unk2)
 {
-	unsigned unk1, unk2;
-	unsigned __stdcall (*real_device_reset)(unsigned unk1, unsigned unk2);
+	unsigned __stdcall (*real_device_reset)(void *unk1, void *unk2) = *(void **)(*(void **)unk1 + 0x38);
 	unsigned ret;
-
-	__asm__(
-		"mov %0, eax;"
-		"mov %1, ecx;"
-		"mov %2, dword ptr [edx + 0x38];"
-		: "=r"(unk1), "=r"(unk2), "=r"(real_device_reset));
 
 	g_d3d_ptrs->invalidate_data();
 	ret = real_device_reset(unk1, unk2);
@@ -926,19 +916,19 @@ hooked_a3d_device_reset(void)
 }
 
 int
-d3d_hook()
+d3d_hook(void)
 {
-	if (game_config_get_int("Global", "d3d8", 0)) {
-		g_d3d_ptrs = &g_d3d8_ptrs;
-	} else {
+	if (GetModuleHandleA("d3d9.dll")) {
 		g_d3d_ptrs = &g_d3d9_ptrs;
+	} else {
+		g_d3d_ptrs = &g_d3d8_ptrs;
 	}
 
 	patch_mem(0x70b1fb, "\xe8\x00\x00\x00\x00\x90", 6);
 	patch_jmp32(0x70b1fb, (uintptr_t)hooked_a3d_end_scene);
 
-	patch_mem(0x70c55f, "\xe8\x00\x00\x00\x00", 5);
-	patch_jmp32(0x70c55f, (uintptr_t)hooked_a3d_device_reset);
+	patch_mem(0x70c55d, "\x51\x50\xe8\x00\x00\x00\x00", 7);
+	patch_jmp32(0x70c55d + 2, (uintptr_t)hooked_a3d_device_reset);
 
 	return S_OK;
 }
@@ -946,7 +936,6 @@ d3d_hook()
 void
 d3d_unhook(void)
 {
-	g_show_console = false;
 	g_d3d_ptrs->shutdown();
 }
 
@@ -956,7 +945,7 @@ static bool g_mouse_activated = false;
 LRESULT
 d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam)
 {
-	if (!g_device || g_unloading) {
+	if (!g_device) {
 		return FALSE;
 	}
 
@@ -975,7 +964,7 @@ d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam)
 LRESULT
 d3d_handle_keyboard(UINT event, WPARAM data, LPARAM lparam)
 {
-	if (!g_device || g_unloading) {
+	if (!g_device) {
 		return FALSE;
 	}
 
