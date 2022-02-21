@@ -1346,34 +1346,6 @@ init_hooks(void)
 	return 0;
 }
 
-static void
-_patch_mem_unsafe(uintptr_t addr, const char *buf, unsigned num_bytes)
-{
-	DWORD prevProt, prevProt2;
-
-	VirtualProtect((void *)addr, num_bytes, PAGE_EXECUTE_READWRITE, &prevProt);
-	memcpy((void *)addr, buf, num_bytes);
-	VirtualProtect((void *)addr, num_bytes, prevProt, &prevProt2);
-}
-
-static void
-_patch_mem_u32_unsafe(uintptr_t addr, uint32_t u32)
-{
-	union {
-		char c[4];
-		uint32_t u;
-	} u;
-
-	u.u = u32;
-	_patch_mem_unsafe(addr, u.c, 4);
-}
-
-static void
-_patch_jmp32_unsafe(uintptr_t addr, uintptr_t fn)
-{
-	_patch_mem_u32_unsafe(addr + 1, fn - addr - 5);
-}
-
 static void * __thiscall
 hooked_open_local_cfg(void *unk, const char *path)
 {

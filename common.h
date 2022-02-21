@@ -27,9 +27,6 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-extern bool g_exiting;
-extern bool g_unloading;
-
 struct ring_buffer {
     size_t size;
     size_t first_idx;
@@ -67,6 +64,11 @@ void trampoline_winapi_fn(void **orig_fn, void *fn);
 void u32_to_str(char *buf, uint32_t u32);
 void restore_mem(void);
 int assemble_x86(uint32_t addr, const char *in, unsigned char **out);
+
+/* patch executable memory without making backups */
+void _patch_mem_unsafe(uintptr_t addr, const char *buf, unsigned num_bytes);
+void _patch_mem_u32_unsafe(uintptr_t addr, uint32_t u32);
+void _patch_jmp32_unsafe(uintptr_t addr, uintptr_t fn);
 
 void common_static_init(void);
 void common_static_fini(void);
