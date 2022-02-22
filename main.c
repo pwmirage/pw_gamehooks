@@ -1106,6 +1106,7 @@ hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
+	*mem_region_get_u32("win_event_handler") = g_orig_event_handler;
 
 	/* used by PW */
 	*(HINSTANCE *)0x927f5c = hinstance;
@@ -1182,6 +1183,10 @@ init_hooks(void)
 	setup_crash_handler(append_crash_info_cb, NULL);
 
 	parse_cmdline();
+
+	/* increase libgamehook refcount so it's never unloaded
+	 * (mostly for debugging / hot patching) */
+	LoadLibraryA("libgamehook.dll");
 
 	/* find and init some game data */
 	rc = game_config_parse("..\\patcher\\game.cfg");
@@ -1377,7 +1382,9 @@ hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
 	}
 
 	/* hook into PW input handling */
-	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
+	g_orig_event_handler = *mem_region_get_u32("win_event_handler");
+	assert(g_orig_event_handler);
+	(WNDPROC)SetWindowLong(g_window, GWL_WNDPROC, (LONG)event_handler);
 
 	return pw_game_tick(game, tick_time);
 }
@@ -1422,8 +1429,6 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		}
 
 		pw_log_color(0xDD1100, "PW Hook unloading");
-
-		SetWindowLong(g_window, GWL_WNDPROC, (LONG)g_orig_event_handler);
 
 		g_unloading = true;
 		d3d_unhook();

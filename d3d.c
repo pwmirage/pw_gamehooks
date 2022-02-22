@@ -790,6 +790,7 @@ imgui_init(void)
 	ImFontConfig_destroy(config);
 
 	g_font13 = ImFontAtlas_AddFontFromFileTTF(io->Fonts, "data/calibrib.ttf", 12, NULL, NULL);
+	*mem_region_get_u32("d3d_font13") = g_font13;
 
 	ImGuiStyle *style = igGetStyle();
 	ImVec4 *colors = style->Colors;
@@ -873,6 +874,8 @@ hooked_a3d_end_scene(void *device_d3d8)
 		}
 
 		g_device = device;
+		*mem_region_get_u32("d3d_device") = g_device;
+
 		igCreateContext(NULL);
 
 		ImGui_ImplWin32_Init(g_window);
@@ -924,6 +927,10 @@ d3d_hook(void)
 		g_d3d_ptrs = &g_d3d8_ptrs;
 	}
 
+	/* load from memory, may be NULL */
+	g_font13 = *mem_region_get_u32("d3d_font13");
+	g_device = *mem_region_get_u32("d3d_device");
+
 	patch_mem(0x70b1fb, "\xe8\x00\x00\x00\x00\x90", 6);
 	patch_jmp32(0x70b1fb, (uintptr_t)hooked_a3d_end_scene);
 
@@ -936,7 +943,6 @@ d3d_hook(void)
 void
 d3d_unhook(void)
 {
-	g_d3d_ptrs->shutdown();
 }
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
