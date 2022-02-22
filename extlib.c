@@ -33,6 +33,7 @@
 #include <stdbool.h>
 #include <d3d9.h>
 #include <imagehlp.h>
+#include <assert.h>
 #include <bfd.h>
 
 #include "extlib.h"
@@ -102,14 +103,34 @@ mem_region_get(const char *name, uint32_t size)
 
     snprintf(mem->name, sizeof(mem->name), "%s", name);
     mem->size = size;
-    mem->data = calloc(1, size);
-    if (!mem->data) {
-        pw_avl_free(g_mem, mem);
-        return NULL;
+
+    if (size) {
+        mem->data = calloc(1, size);
+        if (!mem->data) {
+            pw_avl_free(g_mem, mem);
+            return NULL;
+        }
     }
 
     pw_avl_insert(g_mem, hash, mem);
     return mem;
+}
+
+void **
+mem_region_get_u32(const char *name)
+{
+    struct mem_region *mem;
+
+    mem = mem_region_get(name, 0);
+    assert(mem);
+    if (mem->size != 0) {
+        mem_region_free(mem);
+    }
+
+    mem = mem_region_get(name, 0);
+    assert(mem);
+
+    return &mem->data;
 }
 
 void

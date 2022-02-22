@@ -26,6 +26,7 @@ struct mem_region {
 };
 
 APICALL struct mem_region *mem_region_get(const char *name, uint32_t size);
+APICALL void **mem_region_get_u32(const char *name);
 APICALL void mem_region_free(struct mem_region *mem);
 
 #endif /* PW_GAMEHOOK_EXT_H */
