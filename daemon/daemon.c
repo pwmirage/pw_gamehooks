@@ -93,12 +93,8 @@ handle_conn_sockfd(int connfd, void *ctx)
 	}
 
 	/* TODO API for registering handlers? */
-	if (strchr(buf, ';') != NULL) {
-		conn_echo(connfd, "Error: found invalid character - \";\"");
-		rc = -1;
-	} else if (strcmp(argv[0], "gcc") == 0) {
-		rc = conn_exec_unsafe(connfd, buf);
-	} else if (strcmp(argv[0], "hook") == 0) {
+
+	if (strcmp(argv[0], "hook") == 0) {
 		rc = game_hook(connfd);
 	} else if (strcmp(argv[0], "startdebug") == 0) {
 		if (!argv[1]) {
@@ -106,6 +102,8 @@ handle_conn_sockfd(int connfd, void *ctx)
 			return -1;
 		}
 		rc = start_debug(connfd, atoi(argv[1]));
+	} else {
+		rc = conn_exec_unsafe(connfd, buf);
 	}
 
 	/* FIXME? for now we close the connection after every message */

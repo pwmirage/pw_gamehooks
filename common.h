@@ -22,6 +22,13 @@
  * THE SOFTWARE.
  */
 
+#ifndef PW_COMMON_H
+#define PW_COMMON_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -107,3 +114,9 @@ static void __attribute__((constructor)) COMMON_UNIQUENAME(init_patch_jmp_)(void
     } \
     patch_mem_static_add(addr_p, 5, tmp); \
 }
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* PW_COMMON_H */

@@ -1,4 +1,4 @@
-OBJECTS = main.o input.o pw_api.o gamehook_rc.o common.o d3d.o game_config.o avl.o pw_item_desc.o idmap.o
+OBJECTS = main.o input.o pw_api.o gamehook_rc.o common.o d3d.o game_config.o avl.o pw_item_desc.o idmap.o win_settings.o win_console.o win_misc.o
 LIB_OBJECTS = crash_handler.o extlib.o avl.o
 CFLAGS := -m32 -O2 -ggdb -MMD -MP -masm=intel $(CFLAGS)
 CFLAGS += -DHOOK_BUILD_DATE="\"$(shell TZ=UTC date +'%b %d %Y %I:%M %p UTC')\""
@@ -23,6 +23,9 @@ build/crash_handler.o: CFLAGS := -DDLLEXPORT=1 $(CFLAGS)
 
 build/%.o: %.c
 	gcc $(CFLAGS) -c -o $@ $<
+
+build/%.o: %.cpp
+	g++ -fno-exceptions $(CFLAGS) -c -o $@ $<
 
 build/gamehook_rc.o: gamehook.rc
 	windres -i $< -o $@
