@@ -1344,8 +1344,6 @@ init_hooks(void)
 
 	patch_mem_static_init();
 
-	d3d_hook();
-
 	return 0;
 }
 
@@ -1398,6 +1396,8 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		common_static_init();
 
 		const char dll_disable_buf[] = "\x83\xc4\x04\x83\xc8\xff";
+
+		d3d_hook();
 
 		if (memcmp((void *)(uintptr_t)0x43abd9, dll_disable_buf, 6) == 0) {
 			_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)hooked_pw_game_tick_init);

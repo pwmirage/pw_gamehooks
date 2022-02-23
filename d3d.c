@@ -152,11 +152,11 @@ d3d_hook(void)
 	g_font13 = *mem_region_get_u32("d3d_font13");
 	g_device = *mem_region_get_u32("d3d_device");
 
-	patch_mem(0x70b1fb, "\xe8\x00\x00\x00\x00\x90", 6);
-	patch_jmp32(0x70b1fb, (uintptr_t)hooked_a3d_end_scene);
+	_patch_mem_unsafe(0x70b1fb, "\xe8\x00\x00\x00\x00\x90", 6);
+	_patch_jmp32_unsafe(0x70b1fb, (uintptr_t)hooked_a3d_end_scene);
 
-	patch_mem(0x70c55d, "\x51\x50\xe8\x00\x00\x00\x00", 7);
-	patch_jmp32(0x70c55d + 2, (uintptr_t)hooked_a3d_device_reset);
+	_patch_mem_unsafe(0x70c55d, "\x51\x50\xe8\x00\x00\x00\x00", 7);
+	_patch_jmp32_unsafe(0x70c55d + 2, (uintptr_t)hooked_a3d_device_reset);
 
 	return 0;
 }
