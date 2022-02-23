@@ -18,6 +18,107 @@
 #include "common.h"
 #include "d3d.h"
 
+enum hotkey_action {
+	HOTKEY_A_NONE = 0,
+	HOTKEY_A_SKILL_1_1,
+	HOTKEY_A_SKILL_1_2,
+	HOTKEY_A_SKILL_1_3,
+	HOTKEY_A_SKILL_1_4,
+	HOTKEY_A_SKILL_1_5,
+	HOTKEY_A_SKILL_1_6,
+	HOTKEY_A_SKILL_1_7,
+	HOTKEY_A_SKILL_1_8,
+	HOTKEY_A_SKILL_1_9,
+	HOTKEY_A_SKILL_2_1,
+	HOTKEY_A_SKILL_2_2,
+	HOTKEY_A_SKILL_2_3,
+	HOTKEY_A_SKILL_2_4,
+	HOTKEY_A_SKILL_2_5,
+	HOTKEY_A_SKILL_2_6,
+	HOTKEY_A_SKILL_2_7,
+	HOTKEY_A_SKILL_2_8,
+	HOTKEY_A_SKILL_2_9,
+	HOTKEY_A_SKILL_3_1,
+	HOTKEY_A_SKILL_3_2,
+	HOTKEY_A_SKILL_3_3,
+	HOTKEY_A_SKILL_3_4,
+	HOTKEY_A_SKILL_3_5,
+	HOTKEY_A_SKILL_3_6,
+	HOTKEY_A_SKILL_3_7,
+	HOTKEY_A_SKILL_3_8,
+	HOTKEY_A_SKILL_3_9,
+	HOTKEY_A_SKILLF_1_1,
+	HOTKEY_A_SKILLF_1_2,
+	HOTKEY_A_SKILLF_1_3,
+	HOTKEY_A_SKILLF_1_4,
+	HOTKEY_A_SKILLF_1_5,
+	HOTKEY_A_SKILLF_1_6,
+	HOTKEY_A_SKILLF_1_7,
+	HOTKEY_A_SKILLF_1_8,
+	HOTKEY_A_SKILLF_2_1,
+	HOTKEY_A_SKILLF_2_2,
+	HOTKEY_A_SKILLF_2_3,
+	HOTKEY_A_SKILLF_2_4,
+	HOTKEY_A_SKILLF_2_5,
+	HOTKEY_A_SKILLF_2_6,
+	HOTKEY_A_SKILLF_2_7,
+	HOTKEY_A_SKILLF_2_8,
+	HOTKEY_A_SKILLF_3_1,
+	HOTKEY_A_SKILLF_3_2,
+	HOTKEY_A_SKILLF_3_3,
+	HOTKEY_A_SKILLF_3_4,
+	HOTKEY_A_SKILLF_3_5,
+	HOTKEY_A_SKILLF_3_6,
+	HOTKEY_A_SKILLF_3_7,
+	HOTKEY_A_SKILLF_3_8,
+	HOTKEY_A_PETSKILL_1, /* normal attack */
+	HOTKEY_A_PETSKILL_2,
+	HOTKEY_A_PETSKILL_3,
+	HOTKEY_A_PETSKILL_4,
+	HOTKEY_A_PETSKILL_5,
+	HOTKEY_A_PETSKILL_6,
+	HOTKEY_A_PETSKILL_7,
+	HOTKEY_A_PETSKILL_8,
+	HOTKEY_A_PETSKILL_9,
+	HOTKEY_A_PET_MODE_FOLLOW,
+	HOTKEY_A_PET_MODE_STOP,
+	HOTKEY_A_HIDEUI,
+	HOTKEY_A_CONSOLE,
+	HOTKEY_A_ROLL,
+	HOTKEY_A_MAP,
+	HOTKEY_A_CHARACTER,
+	HOTKEY_A_INVENTORY,
+	HOTKEY_A_SKILLS,
+	HOTKEY_A_QUESTS,
+	HOTKEY_A_ACTIONS,
+	HOTKEY_A_PARTY,
+	HOTKEY_A_FRIENDS,
+	HOTKEY_A_FACTION,
+	HOTKEY_A_PETS,
+	HOTKEY_A_HELP,
+	HOTKEY_A_GM_CONSOLE,
+};
+
+union hotkey_mod_mask {
+	struct {
+		uint8_t shift : 1;
+		uint8_t ctrl : 1;
+		uint8_t alt : 1;
+		uint8_t reserved : 5;
+	};
+	uint8_t combined;
+};
+
+struct hotkey {
+	uint8_t key;
+	union hotkey_mod_mask mods;
+	uint8_t action;
+	struct hotkey *next;
+};
+
+#define MAX_HOTKEYS 256
+static struct hotkey *g_hotkeys[MAX_HOTKEYS];
+
 static struct ui_dialog *
 get_open_world_map_dialog(struct ui_manager *ui_man)
 {
@@ -97,17 +198,75 @@ select_closest_mob(void)
 
 extern bool g_disable_all_overlay;
 
+enum hotkey_action
+get_mapped_action(int event, int keycode)
+{
+	struct hotkey *hotkey;
+	union hotkey_mod_mask mask = {};
+
+	if (event == WM_SYSKEYDOWN) {
+		mask.alt = 1;
+	} else if (event != WM_KEYDOWN) {
+		/* not important */
+		return HOTKEY_A_NONE;
+	}
+
+	if (keycode >= MAX_HOTKEYS) {
+		return HOTKEY_A_NONE;
+	}
+
+	if (keycode >= 'A' && keycode <= 'Z') {
+		keycode += 'a' - 'A';
+	}
+
+	mask.shift = !!(GetAsyncKeyState(VK_SHIFT) & 0x8000);
+	mask.ctrl = !!(GetAsyncKeyState(VK_CONTROL) & 0x8000);
+
+	hotkey = g_hotkeys[keycode];
+	while (hotkey) {
+		if (hotkey->mods.combined == mask.combined) {
+			break;
+		}
+		hotkey = hotkey->next;
+	}
+
+	if (!hotkey) {
+		return HOTKEY_A_NONE;
+	}
+
+	return hotkey->action;
+}
+
 static bool __thiscall
 hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned mods)
 {
 	bool is_repeat = mods & 0x40000000;
 	struct ui_dialog *dialog;
+	enum hotkey_action action;
 
 	if (g_pw_data->game->player->is_in_cosmetician) {
 		return false;
 	}
 
-	//pw_log("event=%x, keycode=%x, mods=%x", event, keycode, mods);
+	pw_log("event=%x, keycode=%x, mods=%x", event, keycode, mods);
+
+	action = get_mapped_action(event, keycode);
+	switch (action) {
+	case HOTKEY_A_GM_CONSOLE: {
+		struct ui_dialog *dialog = pw_get_dialog(ui_man, "Win_GMConsole");
+		if (pw_dialog_is_shown(dialog)) {
+			pw_dialog_show(dialog, false, false, false);
+		} else {
+			pw_dialog_show(dialog, true, false, true);
+		}
+		return true;
+	}
+	default:
+		break;
+	}
+
+	return false;
+
 	switch(event) {
 	case WM_CHAR:
 		switch (keycode) {
@@ -292,15 +451,6 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 			}
 			case 'g':
 			case 'G':
-				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000)) {
-					struct ui_dialog *dialog = pw_get_dialog(ui_man, "Win_GMConsole");
-					if (pw_dialog_is_shown(dialog)) {
-						pw_dialog_show(dialog, false, false, false);
-					} else {
-						pw_dialog_show(dialog, true, false, true);
-					}
-				}
-				return true;
 			default:
 				break;
 		}
@@ -345,3 +495,20 @@ PATCH_MEM(0x40227e, 5, "jmp 0x402296");
 //PATCH_MEM(0x405c1e, 2, "nop; nop");
 /* increase camera movement boundaries (from 11) */
 PATCH_MEM(0x85fc10, 4, ".float 30");
+
+static void
+_set_key(struct hotkey hotkey_p)
+{
+	struct hotkey *h = calloc(1, sizeof(*h));
+	assert(h);
+
+	memcpy(h, &hotkey_p, sizeof(*h));
+	h->next = g_hotkeys[h->key];
+	g_hotkeys[h->key] = h;
+}
+
+static void __attribute__((constructor))
+init(void)
+{
+	_set_key((struct hotkey){ .key = 'g', .action = HOTKEY_A_GM_CONSOLE, .mods = { .ctrl = 1 }});
+}

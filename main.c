@@ -395,10 +395,8 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 	case WM_CHAR:
 		switch (data) {
 			case '~':
-				if (g_show_console) {
-					d3d_console_toggle();
-					return true;
-				}
+				d3d_console_toggle();
+				return true;
 			default:
 				break;
 		}
