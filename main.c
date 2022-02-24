@@ -490,6 +490,7 @@ hooked_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int 
 		if (wcscmp(str, L"update") == 0) {
 			g_update_show = true;
 		}
+
 		return;
 	} else if (channel == 13) {
 		wchar_t msg[256];
@@ -592,6 +593,11 @@ static bool g_exiting = false;
 static bool g_unloading = false;
 static float g_local_max_move_speed = 25.0f;
 
+/* close the game on "exit" event instead of "IDCANCEL". This is paired up
+ * with interfaces.pck change -> clicking the button will generate an "exit"
+ * command. Pressing ESC always sends IDCANCEL and we don't want to close
+ * on that. */
+PATCH_MEM(0x55f919, 5, "push 0x%x", "exit");
 
 static void
 hooked_exit(void)

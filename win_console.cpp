@@ -48,8 +48,6 @@ struct log_entry {
 	char str[0];
 };
 
-bool g_settings_show = false;
-
 static void
 console_init(void)
 {

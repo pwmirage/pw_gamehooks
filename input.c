@@ -14,90 +14,11 @@
 #include <assert.h>
 #include <wingdi.h>
 
+#include "input.h"
+
 #include "pw_api.h"
 #include "common.h"
 #include "d3d.h"
-
-enum hotkey_action {
-	HOTKEY_A_NONE = 0,
-	HOTKEY_A_SKILL_1_1,
-	HOTKEY_A_SKILL_1_2,
-	HOTKEY_A_SKILL_1_3,
-	HOTKEY_A_SKILL_1_4,
-	HOTKEY_A_SKILL_1_5,
-	HOTKEY_A_SKILL_1_6,
-	HOTKEY_A_SKILL_1_7,
-	HOTKEY_A_SKILL_1_8,
-	HOTKEY_A_SKILL_1_9,
-	HOTKEY_A_SKILL_2_1,
-	HOTKEY_A_SKILL_2_2,
-	HOTKEY_A_SKILL_2_3,
-	HOTKEY_A_SKILL_2_4,
-	HOTKEY_A_SKILL_2_5,
-	HOTKEY_A_SKILL_2_6,
-	HOTKEY_A_SKILL_2_7,
-	HOTKEY_A_SKILL_2_8,
-	HOTKEY_A_SKILL_2_9,
-	HOTKEY_A_SKILL_3_1,
-	HOTKEY_A_SKILL_3_2,
-	HOTKEY_A_SKILL_3_3,
-	HOTKEY_A_SKILL_3_4,
-	HOTKEY_A_SKILL_3_5,
-	HOTKEY_A_SKILL_3_6,
-	HOTKEY_A_SKILL_3_7,
-	HOTKEY_A_SKILL_3_8,
-	HOTKEY_A_SKILL_3_9,
-	HOTKEY_A_SKILLF_1_1,
-	HOTKEY_A_SKILLF_1_2,
-	HOTKEY_A_SKILLF_1_3,
-	HOTKEY_A_SKILLF_1_4,
-	HOTKEY_A_SKILLF_1_5,
-	HOTKEY_A_SKILLF_1_6,
-	HOTKEY_A_SKILLF_1_7,
-	HOTKEY_A_SKILLF_1_8,
-	HOTKEY_A_SKILLF_2_1,
-	HOTKEY_A_SKILLF_2_2,
-	HOTKEY_A_SKILLF_2_3,
-	HOTKEY_A_SKILLF_2_4,
-	HOTKEY_A_SKILLF_2_5,
-	HOTKEY_A_SKILLF_2_6,
-	HOTKEY_A_SKILLF_2_7,
-	HOTKEY_A_SKILLF_2_8,
-	HOTKEY_A_SKILLF_3_1,
-	HOTKEY_A_SKILLF_3_2,
-	HOTKEY_A_SKILLF_3_3,
-	HOTKEY_A_SKILLF_3_4,
-	HOTKEY_A_SKILLF_3_5,
-	HOTKEY_A_SKILLF_3_6,
-	HOTKEY_A_SKILLF_3_7,
-	HOTKEY_A_SKILLF_3_8,
-	HOTKEY_A_PETSKILL_1, /* normal attack */
-	HOTKEY_A_PETSKILL_2,
-	HOTKEY_A_PETSKILL_3,
-	HOTKEY_A_PETSKILL_4,
-	HOTKEY_A_PETSKILL_5,
-	HOTKEY_A_PETSKILL_6,
-	HOTKEY_A_PETSKILL_7,
-	HOTKEY_A_PETSKILL_8,
-	HOTKEY_A_PETSKILL_9,
-	HOTKEY_A_PET_MODE_FOLLOW,
-	HOTKEY_A_PET_MODE_STOP,
-	HOTKEY_A_HIDEUI,
-	HOTKEY_A_CONSOLE,
-	HOTKEY_A_ROLL,
-	HOTKEY_A_MAP,
-	HOTKEY_A_CHARACTER,
-	HOTKEY_A_INVENTORY,
-	HOTKEY_A_SKILLS,
-	HOTKEY_A_QUESTS,
-	HOTKEY_A_ACTIONS,
-	HOTKEY_A_PARTY,
-	HOTKEY_A_FRIENDS,
-	HOTKEY_A_FACTION,
-	HOTKEY_A_PETS,
-	HOTKEY_A_HELP,
-	HOTKEY_A_GM_CONSOLE,
-};
 
 union hotkey_mod_mask {
 	struct {
@@ -110,7 +31,7 @@ union hotkey_mod_mask {
 };
 
 struct hotkey {
-	uint8_t key;
+	int key;
 	union hotkey_mod_mask mods;
 	uint8_t action;
 	struct hotkey *next;
@@ -118,6 +39,399 @@ struct hotkey {
 
 #define MAX_HOTKEYS 256
 static struct hotkey *g_hotkeys[MAX_HOTKEYS];
+
+const char *
+mg_input_action_to_str(int id)
+{
+	switch (id) {
+	case HOTKEY_A_SKILL_1_1: return "Skill 1 (Bottom bar)";
+	case HOTKEY_A_SKILL_1_2: return "Skill 2 (Bottom bar)";
+	case HOTKEY_A_SKILL_1_3: return "Skill 3 (Bottom bar)";
+	case HOTKEY_A_SKILL_1_4: return "Skill 4 (Bottom bar)";
+	case HOTKEY_A_SKILL_1_5: return "Skill 5 (Bottom bar)";
+	case HOTKEY_A_SKILL_1_6: return "Skill 6 (Bottom bar)";
+	case HOTKEY_A_SKILL_1_7: return "Skill 7 (Bottom bar)";
+	case HOTKEY_A_SKILL_1_8: return "Skill 8 (Bottom bar)";
+	case HOTKEY_A_SKILL_1_9: return "Skill 9 (Bottom bar)";
+	case HOTKEY_A_SKILL_2_1: return "Skill 1 (Middle bar)";
+	case HOTKEY_A_SKILL_2_2: return "Skill 2 (Middle bar)";
+	case HOTKEY_A_SKILL_2_3: return "Skill 3 (Middle bar)";
+	case HOTKEY_A_SKILL_2_4: return "Skill 4 (Middle bar)";
+	case HOTKEY_A_SKILL_2_5: return "Skill 5 (Middle bar)";
+	case HOTKEY_A_SKILL_2_6: return "Skill 6 (Middle bar)";
+	case HOTKEY_A_SKILL_2_7: return "Skill 7 (Middle bar)";
+	case HOTKEY_A_SKILL_2_8: return "Skill 8 (Middle bar)";
+	case HOTKEY_A_SKILL_2_9: return "Skill 9 (Middle bar)";
+	case HOTKEY_A_SKILL_3_1: return "Skill 1 (Top bar)";
+	case HOTKEY_A_SKILL_3_2: return "Skill 2 (Top bar)";
+	case HOTKEY_A_SKILL_3_3: return "Skill 3 (Top bar)";
+	case HOTKEY_A_SKILL_3_4: return "Skill 4 (Top bar)";
+	case HOTKEY_A_SKILL_3_5: return "Skill 5 (Top bar)";
+	case HOTKEY_A_SKILL_3_6: return "Skill 6 (Top bar)";
+	case HOTKEY_A_SKILL_3_7: return "Skill 7 (Top bar)";
+	case HOTKEY_A_SKILL_3_8: return "Skill 8 (Top bar)";
+	case HOTKEY_A_SKILL_3_9: return "Skill 9 (Top bar)";
+	case HOTKEY_A_SKILLF_1_1: return "Alt. Skill 1 (Bottom bar)";
+	case HOTKEY_A_SKILLF_1_2: return "Alt. Skill 2 (Bottom bar)";
+	case HOTKEY_A_SKILLF_1_3: return "Alt. Skill 3 (Bottom bar)";
+	case HOTKEY_A_SKILLF_1_4: return "Alt. Skill 4 (Bottom bar)";
+	case HOTKEY_A_SKILLF_1_5: return "Alt. Skill 5 (Bottom bar)";
+	case HOTKEY_A_SKILLF_1_6: return "Alt. Skill 6 (Bottom bar)";
+	case HOTKEY_A_SKILLF_1_7: return "Alt. Skill 7 (Bottom bar)";
+	case HOTKEY_A_SKILLF_1_8: return "Alt. Skill 8 (Bottom bar)";
+	case HOTKEY_A_SKILLF_2_1: return "Alt. Skill 1 (Middle bar)";
+	case HOTKEY_A_SKILLF_2_2: return "Alt. Skill 2 (Middle bar)";
+	case HOTKEY_A_SKILLF_2_3: return "Alt. Skill 3 (Middle bar)";
+	case HOTKEY_A_SKILLF_2_4: return "Alt. Skill 4 (Middle bar)";
+	case HOTKEY_A_SKILLF_2_5: return "Alt. Skill 5 (Middle bar)";
+	case HOTKEY_A_SKILLF_2_6: return "Alt. Skill 6 (Middle bar)";
+	case HOTKEY_A_SKILLF_2_7: return "Alt. Skill 7 (Middle bar)";
+	case HOTKEY_A_SKILLF_2_8: return "Alt. Skill 8 (Middle bar)";
+	case HOTKEY_A_SKILLF_3_1: return "Alt. Skill 1 (Top bar)";
+	case HOTKEY_A_SKILLF_3_2: return "Alt. Skill 2 (Top bar)";
+	case HOTKEY_A_SKILLF_3_3: return "Alt. Skill 3 (Top bar)";
+	case HOTKEY_A_SKILLF_3_4: return "Alt. Skill 4 (Top bar)";
+	case HOTKEY_A_SKILLF_3_5: return "Alt. Skill 5 (Top bar)";
+	case HOTKEY_A_SKILLF_3_6: return "Alt. Skill 6 (Top bar)";
+	case HOTKEY_A_SKILLF_3_7: return "Alt. Skill 7 (Top bar)";
+	case HOTKEY_A_SKILLF_3_8: return "Alt. Skill 8 (Top bar)";
+	case HOTKEY_A_PETSKILL_1: return "Pet Normal Attack";
+	case HOTKEY_A_PETSKILL_2: return "Pet Skill 1";
+	case HOTKEY_A_PETSKILL_3: return "Pet Skill 2";
+	case HOTKEY_A_PETSKILL_4: return "Pet Skill 3";
+	case HOTKEY_A_PETSKILL_5: return "Pet Skill 4";
+	case HOTKEY_A_PETSKILL_6: return "Pet Skill 5";
+	case HOTKEY_A_PETSKILL_7: return "Pet Skill 6";
+	case HOTKEY_A_PETSKILL_8: return "Pet Skill 7";
+	case HOTKEY_A_PETSKILL_9: return "Pet Skill 8";
+	case HOTKEY_A_PET_MODE_FOLLOW: return "Set Pet Follow Mode";
+	case HOTKEY_A_PET_MODE_STOP: return "Set Pet Stop Mode";
+	case HOTKEY_A_HIDEUI: return "Toggle Hide UI";
+	case HOTKEY_A_CONSOLE: return "Show/hide console";
+	case HOTKEY_A_ROLL: return "Make a roll";
+	case HOTKEY_A_MAP: return "Show/hide map";
+	case HOTKEY_A_CHARACTER: return "Show/hide character window";
+	case HOTKEY_A_INVENTORY: return "Show/hide inventory";
+	case HOTKEY_A_SKILLS: return "Show/hide skill window";
+	case HOTKEY_A_QUESTS: return "Show/hide quest window";
+	case HOTKEY_A_ACTIONS: return "Show/hide action window";
+	case HOTKEY_A_PARTY: return "Show/hide party window";
+	case HOTKEY_A_FRIENDS: return "Show/hide friends window";
+	case HOTKEY_A_FACTION: return "Show/hide faction window";
+	case HOTKEY_A_PETS: return "Show/hide pet window";
+	case HOTKEY_A_HELP: return "Show/hide help window";
+	case HOTKEY_A_GM_CONSOLE: return "Show/hide GM console";
+	case HOTKEY_A_SELECT_MOB: return "Select nearest mob";
+	default: break;
+	}
+
+	return "Unknown";
+}
+
+const char *g_keynames[] = {
+	"Unknown 0x00",
+	"LMB",
+	"RMB",
+	"Cancel",
+	"MMB",
+	"XMB1",
+	"XMB2",
+	"Unknown 0x07",
+	"Backspace",
+	"Tab",
+	"Unknown 0x0A",
+	"Unknown 0x0B",
+	"Clear",
+	"Enter",
+	"Unknown 0x0E",
+	"Unknown 0x0F",
+	"Shift", /* 0x10 */
+	"Control",
+	"Alt",
+	"Pause",
+	"Capslock",
+	"IME Kana",
+	"Unknown 0x16",
+	"IME Junja",
+	"IME Final",
+	"IME Kanji",
+	"Unknown 0x1A",
+	"Escape",
+	"IME Convert",
+	"IME Nonconvert",
+	"IME Accept",
+	"IME mode change",
+	"Space", /* 0x20 */
+	"Page Up",
+	"Page Down",
+	"End",
+	"Home",
+	"Left arrow",
+	"Up arrow",
+	"Right arrow",
+	"Down arrow",
+	"Select",
+	"Print",
+	"Execute",
+	"Print Screen",
+	"Insert",
+	"Delete",
+	"Help",
+	"0",  /* 0x30 */
+	"1",
+	"2",
+	"3",
+	"4",
+	"5",
+	"6",
+	"7",
+	"8",
+	"9",
+	"Unknown 0x3A",
+	"Unknown 0x3B",
+	"Unknown 0x3C",
+	"Unknown 0x3D",
+	"Unknown 0x3E",
+	"Unknown 0x3F",
+	"Unknown 0x40",  /* 0x40 */
+	"A",
+	"B",
+	"C",
+	"D",
+	"E",
+	"F",
+	"G",
+	"H",
+	"I",
+	"J",
+	"K",
+	"L",
+	"M",
+	"N",
+	"O",
+	"P",  /* 0x50 */
+	"Q",
+	"R",
+	"S",
+	"T",
+	"U",
+	"V",
+	"W",
+	"X",
+	"Y",
+	"Z",
+	"Left Win",
+	"Right Win",
+	"App key",
+	"Unknown 0x5E",
+	"Sleep",
+	"Num 0",  /* 0x60 */
+	"Num 1",
+	"Num 2",
+	"Num 3",
+	"Num 4",
+	"Num 5",
+	"Num 6",
+	"Num 7",
+	"Num 8",
+	"Num 9",
+	"Num *",
+	"Num +",
+	"Separator",
+	"Num -",
+	"Num ,",
+	"Num /",
+	"F1",  /* 0x70 */
+	"F2",
+	"F3",
+	"F4",
+	"F5",
+	"F6",
+	"F7",
+	"F8",
+	"F9",
+	"F10",
+	"F11",
+	"F12",
+	"F13",
+	"F14",
+	"F15",
+	"F16",
+	"F17",  /* 0x80 */
+	"F18",
+	"F19",
+	"F20",
+	"F21",
+	"F22",
+	"F23",
+	"F24",
+	"Unknown 0x88",
+	"Unknown 0x89",
+	"Unknown 0x8A",
+	"Unknown 0x8B",
+	"Unknown 0x8C",
+	"Unknown 0x8D",
+	"Unknown 0x8E",
+	"Unknown 0x8F",
+	"Numlock",  /* 0x90 */
+	"Scroll Lock",
+	"Special 1",
+	"Special 2",
+	"Special 3",
+	"Special 4",
+	"Special 5",
+	"Unknown 0x97",
+	"Unknown 0x98",
+	"Unknown 0x99",
+	"Unknown 0x9A",
+	"Unknown 0x9B",
+	"Unknown 0x9C",
+	"Unknown 0x9D",
+	"Unknown 0x9E",
+	"Unknown 0x9F",
+	"Left Shift", /* 0xA0 */
+	"Right Shift",
+	"Left Control",
+	"Right Control",
+	"Left Alt",
+	"Right Alt",
+	"Back",
+	"Forward",
+	"Refresh",
+	"Stop",
+	"Search",
+	"Favorites",
+	"Home",
+	"Mute",
+	"Vol. Down",
+	"Vol. Up",
+	"Next Track", /* 0xB0 */
+	"Prev. Track",
+	"Stop",
+	"Play/Pause",
+	"Mail",
+	"Media",
+	"Custom 1",
+	"Custom 2",
+	"Unknown 0xB8",
+	"Unknown 0xB9",
+	";",
+	"+",
+	",",
+	"-",
+	".",
+	"/",
+	"~", /* 0xC0 */
+	"Unknown 0xC1",
+	"Unknown 0xC2",
+	"Unknown 0xC3",
+	"Unknown 0xC4",
+	"Unknown 0xC5",
+	"Unknown 0xC6",
+	"Unknown 0xC7",
+	"Unknown 0xC8",
+	"Unknown 0xC9",
+	"Unknown 0xCA",
+	"Unknown 0xCB",
+	"Unknown 0xCC",
+	"Unknown 0xCD",
+	"Unknown 0xCE",
+	"Unknown 0xCF",
+	"Unknown 0xD0", /* 0xD0 */
+	"Unknown 0xD1",
+	"Unknown 0xD2",
+	"Unknown 0xD3",
+	"Unknown 0xD4",
+	"Unknown 0xD5",
+	"Unknown 0xD6",
+	"Unknown 0xD7",
+	"Unknown 0xD8",
+	"Unknown 0xD9",
+	"Unknown 0xDA",
+	"[",
+	"\\",
+	"]",
+	"'",
+	"Misc",
+	"Unknown 0xE0", /* 0xE0 */
+	"Unknown 0xE1",
+	"\\",
+	"Unknown 0xE3",
+	"Unknown 0xE4",
+	"IME Process",
+	"Unknown 0xE6",
+	"Unknown (Packet)",
+	"Unknown 0xE8",
+	"Unknown 0xE9",
+	"Unknown 0xEA",
+	"Unknown 0xEB",
+	"Unknown 0xEC",
+	"Unknown 0xED",
+	"Unknown 0xEE",
+	"Unknown 0xEF",
+	"Unknown 0xF0", /* 0xF0 */
+	"Unknown 0xF1",
+	"Unknown 0xF2",
+	"Unknown 0xF3",
+	"Unknown 0xF4",
+	"Unknown 0xF5",
+	"Attn",
+	"CrSel",
+	"ExSel",
+	"Erase EOF",
+	"Play",
+	"Zoom",
+	"Unknown 0xFC",
+	"PA1",
+	"Clear",
+	"Unknown 0xFF",
+	"Num Enter", /* 0x100 */
+	"Num Left",
+	"Num Up",
+	"Num Right",
+	"Num Down",
+	"Num End",
+	"Num Home",
+	"Num Page Up",
+	"Num Page Down",
+	"Num Insert",
+	"Num Delete",
+};
+
+const char *
+mg_input_to_str(int key)
+{
+	if (key >= sizeof(g_keynames) / sizeof(g_keynames[0])) {
+		return "Unknown";
+	}
+
+	return g_keynames[key];
+}
+
+int
+mg_winevent_to_event(WPARAM wparam, LPARAM lparam)
+{
+	bool is_altrn = (lparam >> 24) & 1;
+	switch (wparam) {
+		case VK_RETURN: return is_altrn ? 0x100 : VK_RETURN;
+		case VK_LEFT: return is_altrn ? VK_LEFT : 0x101;
+		case VK_UP: return is_altrn ? VK_UP : 0x102;
+		case VK_RIGHT: return is_altrn ? VK_RIGHT : 0x103;
+		case VK_DOWN: return is_altrn ? VK_DOWN : 0x104;
+		case VK_END: return is_altrn ? VK_END : 0x105;
+		case VK_HOME: return is_altrn ? VK_HOME : 0x106;
+		case VK_PRIOR: return is_altrn ? VK_PRIOR : 0x107;
+		case VK_NEXT: return is_altrn ? VK_NEXT : 0x108;
+		case VK_INSERT: return is_altrn ? VK_INSERT : 0x109;
+		case VK_DELETE: return is_altrn ? VK_DELETE : 0x10A;
+		case VK_LSHIFT: case VK_RSHIFT: return VK_SHIFT;
+		case VK_LCONTROL: case VK_RCONTROL: return VK_CONTROL;
+		case VK_LMENU: case VK_RMENU: return VK_MENU;
+		default: break;
+	}
+
+	return wparam;
+}
 
 static struct ui_dialog *
 get_open_world_map_dialog(struct ui_manager *ui_man)
@@ -198,7 +512,7 @@ select_closest_mob(void)
 
 extern bool g_disable_all_overlay;
 
-enum hotkey_action
+static enum mg_input_action
 get_mapped_action(int event, int keycode)
 {
 	struct hotkey *hotkey;
@@ -242,7 +556,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 {
 	bool is_repeat = mods & 0x40000000;
 	struct ui_dialog *dialog;
-	enum hotkey_action action;
+	enum mg_input_action action;
 
 	if (g_pw_data->game->player->is_in_cosmetician) {
 		return false;

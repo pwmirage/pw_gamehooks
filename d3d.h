@@ -35,6 +35,7 @@ void d3d_try_show_settings_win(void);
 void d3d_try_show_console(void);
 void d3d_try_show_target_hp(void);
 void d3d_try_show_update_win(void);
+bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
 
 #ifdef __cplusplus
 }

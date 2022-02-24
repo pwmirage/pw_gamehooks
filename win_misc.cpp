@@ -87,6 +87,7 @@ d3d_imgui_init(void)
 	colors[ImGuiCol_TabUnfocused] = (ImVec4){ 0.09f, 0.10f, 0.10f, 0.97f };
 	colors[ImGuiCol_TabUnfocusedActive] = (ImVec4){ 0.16f, 0.17f, 0.18f, 1.00f };
 	colors[ImGuiCol_TableRowBgAlt] = (ImVec4){ 0.18f, 0.18f, 0.18f, 0.06f };
+	colors[ImGuiCol_ModalWindowDimBg] = (ImVec4){0.00f, 0.00f, 0.00f, 0.80f};
 
 	style.PopupRounding = 3;
 

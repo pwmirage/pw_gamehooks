@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <inttypes.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
 #include <ctype.h>
@@ -17,15 +18,31 @@
 #include "d3d.h"
 #include "game_config.h"
 #include "icons_fontawesome.h"
+#include "input.h"
+#include "pw_api.h"
 
 #include "imgui.h"
 
 extern bool g_use_borderless;
+bool g_settings_show = true;
+static int g_setting_action_id = HOTKEY_A_NONE;
+
+static struct {
+    bool listening;
+    int key;
+    int key_wparam;
+    bool shift;
+    bool control;
+    bool alt;
+    char str[64];
+} g_setting_action_key;
 
 void
 d3d_try_show_settings_win(void)
 {
 	bool check, changed = false;
+    int clicked_action_id = HOTKEY_A_NONE;
+    static int clicked_button_no = 0;
 
 	if (!g_settings_show) {
 		return;
@@ -106,7 +123,34 @@ d3d_try_show_settings_win(void)
 			ImGui::BeginChild("ScrollingRegion", {0, 0}, false,
 							ImGuiWindowFlags_HorizontalScrollbar);
 
-			ImGui::Text("This is the Broccoli tab!\nblah blah blah blah blah");
+			if (ImGui::BeginTable("table1", 3)) {
+				for (int row = 1; row < HOTKEY_A_MAX; row++) {
+					ImGui::TableNextRow();
+
+					ImGui::TableNextColumn();
+                    const char *str = mg_input_action_to_str(row);
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX()
+                            + (ImGui::GetColumnWidth() - ImGui::CalcTextSize(str).x) / 2
+                            - ImGui::GetScrollX());
+
+					ImGui::Text(str);
+					ImGui::TableNextColumn();
+                    ImGui::PushID(row * 2);
+                    if (ImGui::Button("None", ImVec2(-FLT_MIN, 0.0f))) {
+                        clicked_action_id = row;
+                        clicked_button_no = 0;
+					}
+                    ImGui::PopID();
+					ImGui::TableNextColumn();
+					ImGui::PushID(row * 2 + 1);
+					if (ImGui::Button("None", ImVec2(ImGui::GetContentRegionAvailWidth() - 10, 0.0f))) {
+                        clicked_action_id = row;
+                        clicked_button_no = 1;
+                    }
+					ImGui::PopID();
+				}
+				ImGui::EndTable();
+			}
 
 			ImGui::EndChild();
 			ImGui::EndTabItem();
@@ -116,8 +160,129 @@ d3d_try_show_settings_win(void)
 
 	ImGui::End();
 
+    if (clicked_action_id) {
+        ImGui::OpenPopup("SetHotkey", 0);
+        g_setting_action_id = clicked_action_id;
+        g_setting_action_key.str[0] = 0;
+        g_setting_action_key.listening = true;
+    }
+
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Always, (ImVec2){ 0.5f, 0.5f });
+
+	if (ImGui::BeginPopupModal("SetHotkey", NULL, ImGuiWindowFlags_NoTitleBar
+            | ImGuiWindowFlags_AlwaysAutoResize)) {
+
+        if (g_setting_action_id == HOTKEY_A_NONE) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::Text(
+                "Set %shotkey for: %s",
+                clicked_button_no ? "alternative " : "",
+                mg_input_action_to_str(g_setting_action_id));
+
+		ImGui::Separator();
+        ImGui::NewLine();
+
+	    ImGui::AlignTextToFramePadding();
+
+        if (g_setting_action_key.listening) {
+            unsigned ts = GetTickCount();
+            if (ts % 1200 > 600) {
+                ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(0.8f, 0.8f, 0.83f));
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text, (ImVec4)ImColor(0.5f, 0.5f, 0.5f));
+            }
+        }
+
+        if (!*g_setting_action_key.str) {
+            ImGui::Text("< Press a key >");
+        } else {
+            ImGui::Text(g_setting_action_key.str);
+        }
+
+        if (g_setting_action_key.listening) {
+            ImGui::PopStyleColor();
+        }
+
+
+        if (!g_setting_action_key.listening) {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetWindowContentRegionWidth() - 100 + ImGui::GetStyle().WindowPadding.x);
+            if (ImGui::Button("Reset", ImVec2(100, 0))) {
+                g_setting_action_key.listening = true;
+            }
+        }
+
+        ImGui::NewLine();
+		ImGui::Separator();
+
+		if (ImGui::Button("OK", ImVec2(140, 0))) {
+			ImGui::CloseCurrentPopup();
+		}
+
+        ImGui::SameLine();
+
+		ImGui::SetItemDefaultFocus();
+
+		if (ImGui::Button("Cancel", ImVec2(140, 0))) {
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
+	}
+
+    if (!ImGui::IsPopupOpen("SetHotkey")) {
+        g_setting_action_id = HOTKEY_A_NONE;
+    }
 
 	if (changed) {
 		game_config_save(false);
 	}
+}
+
+bool
+d3d_settings_handle_keyboard(UINT event, WPARAM wparam, LPARAM lparam)
+{
+    if (!g_setting_action_key.listening) {
+        return FALSE;
+    }
+
+    if (event == WM_KEYDOWN || event == WM_SYSKEYDOWN) {
+        int key;
+        const char *keyname;
+
+        if (wparam == VK_CAPITAL || wparam == VK_ESCAPE) {
+            return TRUE;
+        }
+
+        key = mg_winevent_to_event(wparam, lparam);
+        keyname = mg_input_to_str(key);
+
+        g_setting_action_key.control = GetAsyncKeyState(VK_CONTROL) & 0x8000;
+        g_setting_action_key.shift = GetAsyncKeyState(VK_SHIFT) & 0x8000;
+        g_setting_action_key.alt = GetAsyncKeyState(VK_MENU) & 0x8000;
+        if (key == VK_CONTROL || key == VK_SHIFT || key == VK_MENU) {
+            keyname = "";
+        } else {
+            g_setting_action_key.listening = false;
+            g_setting_action_key.key = key;
+            g_setting_action_key.key_wparam = wparam;
+        }
+
+        snprintf(g_setting_action_key.str, sizeof(g_setting_action_key.str),
+                "%s%s%s%s",
+                g_setting_action_key.control ? "Ctrl + " : "",
+                g_setting_action_key.shift ? "Shift + " : "",
+                g_setting_action_key.alt ? "Alt + " : "",
+                keyname);
+
+	} else if (event == WM_KEYUP || event == WM_SYSKEYUP) {
+		if (wparam == VK_ESCAPE) {
+            g_setting_action_key.listening = false;
+			g_setting_action_id = HOTKEY_A_NONE;
+		}
+	}
+
+	return TRUE;
 }

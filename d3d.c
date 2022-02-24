@@ -188,11 +188,17 @@ d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam)
 	return igGetIO()->WantCaptureMouse;
 }
 
+extern bool g_settings_show;
+
 LRESULT
 d3d_handle_keyboard(UINT event, WPARAM data, LPARAM lparam)
 {
 	if (!g_device) {
 		return FALSE;
+	}
+
+	if (g_settings_show && d3d_settings_handle_keyboard(event, data, lparam)) {
+		return TRUE;
 	}
 
 	ImGui_ImplWin32_WndProcHandler(g_window, event, data, lparam);
