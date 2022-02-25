@@ -1188,10 +1188,6 @@ init_hooks(void)
 
 	parse_cmdline();
 
-	/* increase libgamehook refcount so it's never unloaded
-	 * (mostly for debugging / hot patching) */
-	LoadLibraryA("libgamehook.dll");
-
 	/* find and init some game data */
 	rc = game_config_parse("..\\patcher\\game.cfg");
 	if (rc != 0) {
@@ -1359,6 +1355,10 @@ hooked_open_local_cfg(void *unk, const char *path)
 	static void * __thiscall (*org_fn)(void *unk, const char *path) = (void *)0x6fed70;
 	int rc;
 
+	/* increase libgamehook refcount so it's never unloaded
+	 * (mostly for debugging / hot patching) */
+	LoadLibraryA("libgamehook.dll");
+
 	rc = init_hooks();
 	if (rc != 0) {
 		remove_crash_handler();
@@ -1376,13 +1376,6 @@ hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
 
 	_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)pw_game_tick);
 
-	g_window = *(HWND *)(uintptr_t)0x927f60;
-
-	rc = init_hooks();
-	if (rc != 0) {
-		return 0;
-	}
-
 	/* hook into PW input handling */
 	g_orig_event_handler = *mem_region_get_u32("win_event_handler");
 	assert(g_orig_event_handler);
@@ -1395,17 +1388,26 @@ BOOL APIENTRY
 DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 {
 	unsigned i;
+	int rc;
 
 	switch (reason) {
 	case DLL_PROCESS_ATTACH: {
 		DisableThreadLibraryCalls(mod);
 		common_static_init();
 
+
 		const char dll_disable_buf[] = "\x83\xc4\x04\x83\xc8\xff";
 
 		d3d_hook();
 
 		if (memcmp((void *)(uintptr_t)0x43abd9, dll_disable_buf, 6) == 0) {
+			g_window = *(HWND *)(uintptr_t)0x927f60;
+
+			rc = init_hooks();
+			if (rc != 0) {
+				return 0;
+			}
+
 			_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)hooked_pw_game_tick_init);
 			return TRUE;
 		}
