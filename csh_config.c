@@ -14,7 +14,7 @@
 #include <sys/types.h>
 #include <assert.h>
 
-#include "game_config.h"
+#include "csh_config.h"
 
 struct cached_field {
 	char key[128];
@@ -22,25 +22,22 @@ struct cached_field {
 	struct cached_field *next;
 };
 
-struct config_line {
+struct cfg_line {
 	char str[128];
-	struct config_line *next;
+	struct cfg_line *next;
 };
 
-struct game_config {
-	char filename[64];
-	char profile[64];
+struct csh_cfg_internal {
 	struct cached_field *cached;
-	struct config_line *file_lines;
-} g_config = {
-	.profile = "Default",
+	struct cfg_line *file_lines;
 };
 
-int
-game_config_set_file(const char *filepath)
-{
-	snprintf(g_config.filename, sizeof(g_config.filename), "%s", filepath);
-}
+struct csh_cfg_internal g_csh_cfg_internal;
+
+struct csh_cfg g_csh_cfg = {
+	.profile = "Default",
+	.intrnl = &g_csh_cfg_internal,
+};
 
 /** strip preceeding and following quotes and whitespaces */
 static char *
@@ -77,13 +74,7 @@ cleanup_str(char *str, const char *chars_to_remove)
 }
 
 int
-game_config_set_profile(const char *profile)
-{
-	snprintf(g_config.profile, sizeof(g_config.profile), "%s", profile);
-}
-
-int
-game_config_parse(game_config_fn fn, void *fn_ctx)
+csh_cfg_parse(csh_cfg_fn fn, void *fn_ctx)
 {
 	FILE *fp;
 	char line[1024];
@@ -92,9 +83,9 @@ game_config_parse(game_config_fn fn, void *fn_ctx)
 	int rc;
 	bool do_skip = false;
 
-	assert(g_config.filename[0] != 0);
+	assert(g_csh_cfg.filename[0] != 0);
 
-	fp = fopen(g_config.filename, "r");
+	fp = fopen(g_csh_cfg.filename, "r");
 	if (!fp) {
 		return -errno;
 	}
@@ -111,7 +102,7 @@ game_config_parse(game_config_fn fn, void *fn_ctx)
 			char *var1 = cleanup_str(tmp, " \t\"'");
 			char *var2 = cleanup_str(tmp2, " \t\"'");
 
-			if (strcmp(var1, "$PROFILE") == 0 && strcmp(var2, g_config.profile) == 0) {
+			if (strcmp(var1, "$PROFILE") == 0 && strcmp(var2, g_csh_cfg.profile) == 0) {
 				/* go ahead */
 			} else {
 				do_skip = true;
@@ -133,53 +124,17 @@ game_config_parse(game_config_fn fn, void *fn_ctx)
 }
 
 static int
-write_new(void)
-{
-	FILE *fp;
-	int i, rc = 0;
-
-	assert(g_config.filename[0] != 0);
-	fp = fopen(g_config.filename, "w");
-	if (!fp) {
-		return -errno;
-	}
-
-	#define GC_W(S) fputs(S "\r\n", fp)
-	GC_W("# PW Mirage Client Config");
-	GC_W("# This is a list of configuration commands. The same commands can be typed");
-	GC_W("# into the built-in console inside the game (Shift + ~). Putting them here");
-	GC_W("# simply makes them execute at launch.");
-	GC_W("#");
-	GC_W("# There's multiple variances (profiles) of game configuration in this file.");
-	GC_W("# The game starts with any profile selected from the launcher or provided");
-	GC_W("# via game.exe parameters (if launched directly):");
-	GC_W("# \"C:\\PWMirage\\element\\game.exe\" --profile Secondary");
-	GC_W("# or");
-	GC_W("# \"C:\\PWMirage\\element\\game.exe\" -p Secondary");
-	GC_W("#");
-	GC_W("# The syntax is a very basic subset of Shell. See pwmirage.com/launcher");
-	GC_W("# for full documentation.");
-	GC_W("#");
-	GC_W("# Changing ingame settings will modify this file. The conflicting commands");
-	GC_W("# may be updated, or new overriding rules might be added to the end of file.");
-	GC_W("");
-
-	fclose(fp);
-	return 0;
-}
-
-static int
 read_file_for_updating(void)
 {
 	FILE *fp;
-	struct config_line **next_p;
-	struct config_line *line;
+	struct cfg_line **next_p;
+	struct cfg_line *line;
 	char *c, *l;
 	int len;
 	char *buf;
 	bool do_skip = false;
 
-	fp = fopen(g_config.filename, "r");
+	fp = fopen(g_csh_cfg.filename, "r");
 	if (!fp) {
 		return -errno;
 	}
@@ -198,7 +153,7 @@ read_file_for_updating(void)
 	buf[len] = 0;
 
 	l = c = buf;
-	next_p = &g_config.file_lines;
+	next_p = &g_csh_cfg.intrnl->file_lines;
 	while (*c) {
 		if (*c == '\r') {
 			*c = 0;
@@ -220,7 +175,7 @@ read_file_for_updating(void)
 	}
 
 	/* add remainder if any, OR if the file is empty so there's at least 1 rule */
-	if (l != c || g_config.file_lines == NULL) {
+	if (l != c || g_csh_cfg.intrnl->file_lines == NULL) {
 		line = calloc(1, sizeof(*line));
 		assert(line);
 		l = cleanup_str(l, " \t");
@@ -238,7 +193,7 @@ read_file_for_updating(void)
 static void
 free_file_for_updating(void)
 {
-	struct config_line *tmp, *line = g_config.file_lines;
+	struct cfg_line *tmp, *line = g_csh_cfg.intrnl->file_lines;
 
 	while (line) {
 		tmp = line->next;
@@ -246,21 +201,21 @@ free_file_for_updating(void)
 		line = tmp;
 	}
 
-	g_config.file_lines = NULL;
+	g_csh_cfg.intrnl->file_lines = NULL;
 }
 
 static void
 set_cmd(const char *key, const char *val)
 {
-	struct config_line *prev = NULL, *line;
+	struct cfg_line *prev = NULL, *line;
 	int keylen = strlen(key);
 	char tmp[64], tmp2[64];
 	int rc;
 	bool do_skip = false;
 
-	assert(g_config.file_lines);
+	assert(g_csh_cfg.intrnl->file_lines);
 
-	line = g_config.file_lines;
+	line = g_csh_cfg.intrnl->file_lines;
 	while (line) {
 		rc = sscanf(line->str, "if [ %63s == %63s ]; then", tmp, tmp2);
 		if (rc == 2) {
@@ -285,10 +240,24 @@ set_cmd(const char *key, const char *val)
 }
 
 static int
+write_new(void)
+{
+	FILE *fp;
+	int i, rc = 0;
+
+	assert(g_csh_cfg.filename[0] != 0);
+	fp = fopen(g_csh_cfg.filename, "w");
+	if (!fp) {
+		return -errno;
+	}
+	fclose(fp);
+}
+
+static int
 config_flush(void)
 {
 	struct cached_field *cache, *tmpcache;
-	struct config_line *line;
+	struct cfg_line *line;
 	FILE *fp;
 	char tmp[64], tmp2[64];
 	bool do_indent = false;
@@ -308,21 +277,21 @@ config_flush(void)
 		return rc;
 	}
 
-	cache = g_config.cached;
+	cache = g_csh_cfg.intrnl->cached;
 	while (cache) {
 		tmpcache = cache->next;
 		set_cmd(cache->key, cache->val);
 		free(cache);
 		cache = tmpcache;
 	}
-	g_config.cached = NULL;
+	g_csh_cfg.intrnl->cached = NULL;
 
-	fp = fopen(g_config.filename, "w");
+	fp = fopen(g_csh_cfg.filename, "w");
 	if (!fp) {
 		return -errno;
 	}
 
-	line = g_config.file_lines;
+	line = g_csh_cfg.intrnl->file_lines;
 	while (line) {
 		char c;
 
@@ -347,13 +316,13 @@ config_flush(void)
 }
 
 int
-game_config_save_s(const char *key, const char *val, bool flush)
+csh_cfg_save_s(const char *key, const char *val, bool flush)
 {
 	FILE *fp;
-	struct cached_field **last_p = &g_config.cached;
+	struct cached_field **last_p = &g_csh_cfg.intrnl->cached;
 	struct cached_field *cache;
 
-	assert(g_config.filename[0] != 0);
+	assert(g_csh_cfg.filename[0] != 0);
 
 	if (key == NULL) {
 		if (flush) {
@@ -390,24 +359,25 @@ game_config_save_s(const char *key, const char *val, bool flush)
 }
 
 int
-game_config_save_i(const char *key, int64_t val, bool flush)
+csh_cfg_save_i(const char *key, int64_t val, bool flush)
 {
 	char buf[16];
-	snprintf(buf, sizeof(buf), "%"PRIu64, val);
+	snprintf(buf, sizeof(buf), "%"PRId64, val);
 
-	return game_config_save_s(key, buf, flush);
+	return csh_cfg_save_s(key, buf, flush);
 }
 
 int
-game_config_save_f(const char *key, float val, bool flush)
+csh_cfg_save_f(const char *key, float val, bool flush)
 {
 	char buf[32];
 	snprintf(buf, sizeof(buf), "%.6f", val);
 
-	return game_config_save_s(key, buf, flush);
+	return csh_cfg_save_s(key, buf, flush);
 }
 
-#ifdef GAME_CONFIG_TEST
+#ifdef CSH_CONFIG_TEST
+
 static void
 print_fn(const char *cmd, void *ctx)
 {
@@ -417,13 +387,15 @@ print_fn(const char *cmd, void *ctx)
 int
 main(void)
 {
-    game_config_set_file("test1.cfg");
+	snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "test1.cfg");
+	snprintf(g_csh_cfg.profile, sizeof(g_csh_cfg.profile), "Secondary");
 
-    game_config_save_s("set d3d8", "0", true);
-    game_config_save_s("set x", "768", false);
-    game_config_save_s("set show_mp_bar", "1", false);
-    game_config_save_s("set x2", "1111", true);
+    csh_cfg_save_s("set test1", "0", true);
+    csh_cfg_save_s("set x", "768", false);
+    csh_cfg_save_s("set test15", "1", false);
+    csh_cfg_save_i("set y", 1111, true);
 
-	game_config_parse("Secondary", print_fn, NULL);
+	csh_cfg_parse(print_fn, NULL);
 }
-#endif
+
+#endif /* CSH_CONFIG_TEST */
