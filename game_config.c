@@ -1,466 +1,429 @@
 /* SPDX-License-Identifier: MIT
- * Copyright(c) 2021 Darek Stojaczyk for pwmirage.com
+ * Copyright(c) 2021-2022 Darek Stojaczyk for pwmirage.com
  */
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
 #include <inttypes.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <assert.h>
 
-#include "avl.h"
 #include "game_config.h"
-#include "common.h"
 
-struct game_config_category;
+struct cached_field {
+	char key[128];
+	char val[128];
+	struct cached_field *next;
+};
+
+struct config_line {
+	char str[128];
+	struct config_line *next;
+};
 
 struct game_config {
-	FILE *fp;
-	bool init;
-	struct game_config_category *last_cat;
-	int max_category_order;
-	struct pw_avl *categories;
-} g_config;
-
-struct game_config_opt {
-	struct game_config_category *category;
-	char key[128];
-	bool valid;
-	int order;
-	char *strval;
-	int intval;
+	char filename[64];
+	char profile[64];
+	struct cached_field *cached;
+	struct config_line *file_lines;
+} g_config = {
+	.profile = "Default",
 };
 
-struct game_config_category {
-	char name[32];
-	int max_opts;
-	int order;
-	struct pw_avl *opts;
-	struct game_config_opt **opts_arr;
-};
-
-static uint32_t
-djb2(const char *str) {
-	uint32_t hash = 5381;
-	unsigned char c;
-
-	while ((c = (unsigned char)*str++)) {
-	    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-	}
-
-	return hash;
-}
-
-struct game_config_category *
-_config_get_category(const char *name)
-{
-	struct game_config_category *cat;
-	unsigned hash = djb2(name);
-
-	cat = pw_avl_get(g_config.categories, hash);
-	while (cat && strcmp(cat->name, name) != 0) {
-		cat = pw_avl_get_next(g_config.categories, cat);
-	}
-	return cat;
-}
-
-static struct game_config_category *
-_config_set_category(const char *name)
-{
-	struct game_config_category *cat;
-	unsigned hash = djb2(name);
-	bool do_insert = false;
-
-	cat = pw_avl_get(g_config.categories, hash);
-	while (cat && strcmp(cat->name, name) != 0) {
-		cat = pw_avl_get_next(g_config.categories, cat);
-	}
-
-	if (!cat) {
-		if (g_config.init && g_config.last_cat) {
-			game_config_set_invalid(g_config.last_cat->name, "");
-		}
-
-		cat = pw_avl_alloc(g_config.categories);
-		if (!cat) {
-			return NULL;
-		}
-
-		snprintf(cat->name, sizeof(cat->name), "%s", name);
-		cat->opts = pw_avl_init(sizeof(struct game_config_opt));
-		if (!cat->opts) {
-			pw_avl_free(g_config.categories, cat);
-			return NULL;
-		}
-		cat->order = g_config.max_category_order++;
-		g_config.last_cat = cat;
-		do_insert = true;
-	}
-
-	if (do_insert) {
-		pw_avl_insert(g_config.categories, hash, cat);
-	}
-
-	return cat;
-}
-
-static struct game_config_opt *
-_config_get(const char *category, const char *key)
-{
-	struct game_config_category *cat;
-	struct game_config_opt *opt;
-
-	cat = _config_get_category(category);
-	if (!cat) {
-		return NULL;
-	}
-
-	unsigned hash = djb2(key);
-	opt = pw_avl_get(cat->opts, hash);
-	while (opt && strcmp(opt->key, key) != 0) {
-		opt = pw_avl_get_next(cat->opts, opt);
-	}
-	return opt;
-}
-
-const char *
-game_config_get_str(const char *category,
-		const char *key, const char *defval)
-{
-	struct game_config_opt *opt;
-
-	opt = _config_get(category, key);
-	if (!opt) {
-		return defval;
-	}
-	return opt->strval;
-}
-
 int
-game_config_get_int(const char *category, const char *key, int defval)
+game_config_set_file(const char *filepath)
 {
-	struct game_config_opt *opt;
-
-	opt = _config_get(category, key);
-	if (!opt) {
-		return defval;
-	}
-	return opt->intval;
+	snprintf(g_config.filename, sizeof(g_config.filename), "%s", filepath);
 }
 
-static struct game_config_opt *
-_config_set(struct game_config_category *cat, const char *key)
+/** strip preceeding and following quotes and whitespaces */
+static char *
+cleanup_str(char *str, const char *chars_to_remove)
 {
-	struct game_config_opt *opt;
-	unsigned hash;
-	bool do_insert = false;
+	int len = strlen(str);
+	char *end = str + len - 1;
 
-	hash = djb2(key);
-	opt = pw_avl_get(cat->opts, hash);
-	while (opt && strcmp(opt->key, key) != 0) {
-		opt = pw_avl_get_next(cat->opts, opt);
-	}
-
-	if (!opt) {
-		opt = pw_avl_alloc(cat->opts);
-		if (!opt) {
-			return NULL;
-		}
-
-		opt->category = cat;
-		opt->order = cat->max_opts++;
-		snprintf(opt->key, sizeof(opt->key), "%s", key);
-		do_insert = true;
-	}
-
-	if (do_insert) {
-		pw_avl_insert(cat->opts, hash, opt);
-	}
-
-	return opt;
-}
-
-int
-game_config_set_str(const char *category, const char *key, const char *value)
-{
-	struct game_config_category *cat;
-	struct game_config_opt *opt;
-
-	cat = _config_set_category(category);
-	if (!cat) {
-		return -ENOMEM;
-	}
-
-	opt = _config_set(cat, key);
-	if (!opt) {
-		return -ENOMEM;
-	}
-
-	opt->strval = strdup(value);
-	if (!opt->strval) {
-		pw_avl_remove(cat->opts, opt);
-		pw_avl_free(cat->opts, opt);
-		return -ENOMEM;
-	}
-
-	opt->valid = true;
-	return 0;
-}
-
-int
-game_config_set_int(const char *category, const char *key, int value)
-{
-	struct game_config_category *cat;
-	struct game_config_opt *opt;
-
-	cat = _config_set_category(category);
-	if (!cat) {
-		return -ENOMEM;
-	}
-
-	opt = _config_set(cat, key);
-	if (!opt) {
-		return -ENOMEM;
-	}
-
-	opt->intval = value;
-	opt->valid = true;
-	return 0;
-}
-
-int
-game_config_set_invalid(const char *category, const char *val)
-{
-	struct game_config_category *cat;
-	struct game_config_opt *opt;
-	unsigned hash = djb2("#");
-
-	cat = _config_set_category(category);
-	if (!cat) {
-		return -ENOMEM;
-	}
-
-	opt = pw_avl_alloc(cat->opts);
-	if (!opt) {
-		return -ENOMEM;
-	}
-
-	opt->category = cat;
-	opt->key[0] = '#';
-
-	opt->strval = strdup(val);
-	if (!opt->strval) {
-		pw_avl_free(cat->opts, opt);
-		return -ENOMEM;
-	}
-
-	opt->order = cat->max_opts++;
-	pw_avl_insert(cat->opts, hash, opt);
-	opt->valid = false;
-	return 0;
-}
-
-void
-strip_newlines(char *str)
-{
 	while (*str) {
-		if (*str == '\r' || *str == '\n') {
+		if (*str == '\\' && *(str + 1) == '"') {
+			str += 2;
+			continue;
+		} else if (strchr(chars_to_remove, *str)) {
 			*str = 0;
-			break;
+			str++;
+			continue;
 		}
-		str++;
+		break;
 	}
+
+	while (end > str) {
+		if (*(end - 1) == '\\' && *end == '"') {
+			end -= 2;
+			continue;
+		} else if (strchr(chars_to_remove, *end)) {
+			*end = 0;
+			end--;
+			continue;
+		}
+		break;
+	}
+
+	return str;
 }
 
 int
-game_config_parse(const char *filepath)
+game_config_set_profile(const char *profile)
 {
+	snprintf(g_config.profile, sizeof(g_config.profile), "%s", profile);
+}
+
+int
+game_config_parse(game_config_fn fn, void *fn_ctx)
+{
+	FILE *fp;
 	char line[1024];
-	char category[1042] = "Global";
-	char key[1024];
-	char *tmp, *val = NULL;
-	bool do_parse = false;
+	char tmp[64], tmp2[64];
+	char *l;
 	int rc;
+	bool do_skip = false;
 
-	g_config.fp = fopen(filepath, "r+");
-	if (!g_config.fp) {
-		if (errno == ENOENT) {
-			g_config.fp = fopen(filepath, "w+");
-		}
+	assert(g_config.filename[0] != 0);
 
-		if (!g_config.fp) {
-			return -errno;
-		}
+	fp = fopen(g_config.filename, "r");
+	if (!fp) {
+		return -errno;
 	}
 
-	g_config.categories = pw_avl_init(sizeof(struct game_config_opt));
-	if (!g_config.categories) {
-		fclose(g_config.fp);
-		return -ENOMEM;
-	}
+	while (fgets(line, sizeof(line), fp) != NULL) {
+		l = cleanup_str(line, " \t\r\n");
 
-	while (fgets(line, sizeof(line), g_config.fp) != NULL) {
-		int p = 0;
-		char c = 0;
-
-		if (line[0] == '#' || line[0] == 0 || line[0] == '\n' || line[0] == '\r') {
-			if (do_parse) {
-				strip_newlines(line);
-				game_config_set_invalid(category, line);
-			}
+		if (l[0] == '#' || l[0] == 0) {
 			continue;
 		}
 
-		do_parse = true;
+		rc = sscanf(l, "if [ %63s == %63s ]; then", tmp, tmp2);
+		if (rc == 2) {
+			char *var1 = cleanup_str(tmp, " \t\"'");
+			char *var2 = cleanup_str(tmp2, " \t\"'");
 
-		rc = sscanf(line, " [ %[^]] %c ", key, &c);
-		if (rc == 2 && c == ']') {
-			snprintf(category, sizeof(category), "%s", key);
-			_config_set_category(category);
+			if (strcmp(var1, "$PROFILE") == 0 && strcmp(var2, g_config.profile) == 0) {
+				/* go ahead */
+			} else {
+				do_skip = true;
+			}
+
+			continue;
+		} else if (strcmp(l, "fi") == 0) {
+			do_skip = false;
 			continue;
 		}
 
-		rc = sscanf(line, " %[^=] = %n ", key, &p);
-		if (rc < 1 || p == 0) {
-			if (do_parse) {
-				strip_newlines(line);
-				game_config_set_invalid(category, line);
-			}
-			continue;
-		}
-
-		/* trim key */
-		tmp = key + strlen(key) - 1;
-		while (*tmp == ' ') {
-			*tmp = 0;
-			tmp--;
-		}
-
-		val = line + p;
-		if (*val == '"') {
-			/* strip preceeding and following quotes */
-			val += 1;
-			tmp = val;
-			while (*tmp) {
-				if (*tmp == '\\' && *(tmp + 1) == '"') {
-					tmp += 2;
-					continue;
-				} else if (*tmp == '"' || *tmp == '\r' || *tmp == '\n') {
-					*tmp = 0;
-					break;
-				}
-				tmp++;
-			}
-			rc = game_config_set_str(category, key, val);
-		} else {
-			int intval = atoi(val);
-
-			rc = game_config_set_int(category, key, intval);
-		}
-		if (rc) {
-			/* TODO cleanup */
-			return rc;
+		if (!do_skip) {
+			fn(l, fn_ctx);
 		}
 	}
 
-	g_config.init = true;
+	fclose(fp);
 	return 0;
 }
 
-void
-sort_cb(void *el, void *ctx1, void *ctx2)
+static int
+write_new(void)
 {
-	struct game_config_category *cat = ctx1;
-	struct pw_avl_node *node = el;
-	struct game_config_opt *opt = (void *)node->data;
-
-//	assert(opt->order < cat->max_opts);
-	cat->opts_arr[opt->order] = opt;
-}
-
-void
-category_sort_cb(void *el, void *ctx1, void *ctx2)
-{
-	struct game_config_category **cats = ctx1;
-	struct pw_avl_node *node = el;
-	struct game_config_category *cat = (void *)node->data;
-	int *rc = ctx2;
-
-//	assert(cat->order < g_config.max_category_order);
-	cats[cat->order] = cat;
-
-	cat->opts_arr = calloc(cat->max_opts, sizeof(*cat->opts_arr));
-	if (!cat->opts_arr) {
-		*rc = -ENOMEM;
-		return;
-	}
-}
-
-void
-save_category(struct game_config_category *cat)
-{
-	int i;
-
-	fprintf(g_config.fp, "[%s]\n", cat->name);
-
-	pw_avl_foreach(cat->opts, sort_cb, cat, NULL);
-
-	for (i = 0; i < cat->max_opts; i++) {
-		struct game_config_opt *opt = cat->opts_arr[i];
-
-		if (!opt) {
-			continue;
-		} else if (!opt->valid) {
-			fprintf(g_config.fp, "%s\n", opt->strval);
-		} else if (opt->strval) {
-			fprintf(g_config.fp, "%s = \"%s\"\n", opt->key, opt->strval);
-		} else {
-			fprintf(g_config.fp, "%s = %d\n", opt->key, opt->intval);
-		}
-	}
-}
-
-void
-game_config_save(bool close)
-{
-	struct game_config_category **cats;
+	FILE *fp;
 	int i, rc = 0;
 
-	if (!g_config.fp) {
-		return;
+	assert(g_config.filename[0] != 0);
+	fp = fopen(g_config.filename, "w");
+	if (!fp) {
+		return -errno;
 	}
 
-	cats = calloc(g_config.max_category_order, sizeof(*cats));
-	if (!cats) {
-		/* we just can't update the config, too bad */
-		return;
-	}
+	#define GC_W(S) fputs(S "\r\n", fp)
+	GC_W("# PW Mirage Client Config");
+	GC_W("# This is a list of configuration commands. The same commands can be typed");
+	GC_W("# into the built-in console inside the game (Shift + ~). Putting them here");
+	GC_W("# simply makes them execute at launch.");
+	GC_W("#");
+	GC_W("# There's multiple variances (profiles) of game configuration in this file.");
+	GC_W("# The game starts with any profile selected from the launcher or provided");
+	GC_W("# via game.exe parameters (if launched directly):");
+	GC_W("# \"C:\\PWMirage\\element\\game.exe\" --profile Secondary");
+	GC_W("# or");
+	GC_W("# \"C:\\PWMirage\\element\\game.exe\" -p Secondary");
+	GC_W("#");
+	GC_W("# The syntax is a very basic subset of Shell. See pwmirage.com/launcher");
+	GC_W("# for full documentation.");
+	GC_W("#");
+	GC_W("# Changing ingame settings will modify this file. The conflicting commands");
+	GC_W("# may be updated, or new overriding rules might be added to the end of file.");
+	GC_W("");
 
-	pw_avl_foreach(g_config.categories, category_sort_cb, cats, &rc);
-	if (rc) {
-		/* ^ */
-		return;
-	}
-
-	fseek(g_config.fp, 0, SEEK_SET);
-	fprintf(g_config.fp, "# PW Game settings v1.1\n");
-	fprintf(g_config.fp, "\n");
-
-	for (i = 0; i < g_config.max_category_order; i++) {
-		if (!cats[i]) {
-			continue;
-		}
-		save_category(cats[i]);
-	}
-
-	fflush(g_config.fp);
-	ftruncate(fileno(g_config.fp), ftell(g_config.fp));
-	if (close) {
-		fclose(g_config.fp);
-	}
+	fclose(fp);
+	return 0;
 }
 
+static int
+read_file_for_updating(void)
+{
+	FILE *fp;
+	struct config_line **next_p;
+	struct config_line *line;
+	char *c, *l;
+	int len;
+	char *buf;
+	bool do_skip = false;
+
+	fp = fopen(g_config.filename, "r");
+	if (!fp) {
+		return -errno;
+	}
+
+	fseek(fp, 0, SEEK_END);
+	len = ftell(fp);
+
+	fseek(fp, 0, SEEK_SET);
+	buf = malloc(len + 1);
+	if (!buf) {
+		fclose(fp);
+		return -errno;
+	}
+
+	fread(buf, 1, len, fp);
+	buf[len] = 0;
+
+	l = c = buf;
+	next_p = &g_config.file_lines;
+	while (*c) {
+		if (*c == '\r') {
+			*c = 0;
+		} else if (*c == '\n') {
+			*c = 0;
+
+			line = calloc(1, sizeof(*line));
+			assert(line);
+			l = cleanup_str(l, " \t");
+			snprintf(line->str, sizeof(line->str), "%s", l);
+
+			*next_p = line;
+			next_p = &line->next;
+
+			l = c + 1;
+		}
+
+		c++;
+	}
+
+	/* add remainder if any, OR if the file is empty so there's at least 1 rule */
+	if (l != c || g_config.file_lines == NULL) {
+		line = calloc(1, sizeof(*line));
+		assert(line);
+		l = cleanup_str(l, " \t");
+		snprintf(line->str, sizeof(line->str), "%s", l);
+		*next_p = line;
+		next_p = &line->next;
+	}
+
+	fclose(fp);
+	free(buf);
+
+	return 0;
+}
+
+static void
+free_file_for_updating(void)
+{
+	struct config_line *tmp, *line = g_config.file_lines;
+
+	while (line) {
+		tmp = line->next;
+		free(line);
+		line = tmp;
+	}
+
+	g_config.file_lines = NULL;
+}
+
+static void
+set_cmd(const char *key, const char *val)
+{
+	struct config_line *prev = NULL, *line;
+	int keylen = strlen(key);
+	char tmp[64], tmp2[64];
+	int rc;
+	bool do_skip = false;
+
+	assert(g_config.file_lines);
+
+	line = g_config.file_lines;
+	while (line) {
+		rc = sscanf(line->str, "if [ %63s == %63s ]; then", tmp, tmp2);
+		if (rc == 2) {
+			/* don't override variables in ifs, just append overriding commands to the end */
+			do_skip = true;
+		} else if (strcmp(line->str, "fi") == 0) {
+			do_skip = false;
+		} else if (!do_skip && strncmp(line->str, key, keylen) == 0) {
+			snprintf(line->str, sizeof(line->str), "%s %s", key, val);
+			return;
+		}
+
+		prev = line;
+		line = line->next;
+	}
+
+	prev->next = calloc(1, sizeof(*prev->next));
+	assert(prev->next);
+
+	snprintf(prev->next->str, sizeof(prev->next->str), "%s %s", key, val);
+	prev->next->next = line;
+}
+
+static int
+config_flush(void)
+{
+	struct cached_field *cache, *tmpcache;
+	struct config_line *line;
+	FILE *fp;
+	char tmp[64], tmp2[64];
+	bool do_indent = false;
+	int rc;
+
+	rc = read_file_for_updating();
+	if (rc == -ENOENT) {
+		rc = write_new();
+		if (rc) {
+			return rc;
+		}
+
+		rc = read_file_for_updating();
+	}
+
+	if (rc) {
+		return rc;
+	}
+
+	cache = g_config.cached;
+	while (cache) {
+		tmpcache = cache->next;
+		set_cmd(cache->key, cache->val);
+		free(cache);
+		cache = tmpcache;
+	}
+	g_config.cached = NULL;
+
+	fp = fopen(g_config.filename, "w");
+	if (!fp) {
+		return -errno;
+	}
+
+	line = g_config.file_lines;
+	while (line) {
+		char c;
+
+		if (strcmp(line->str, "fi") == 0) {
+			do_indent = false;
+		}
+
+		fprintf(fp, "%s%s\r\n", do_indent ? "\t" : "", line->str);
+
+		rc = sscanf(line->str, "if [ %63s == %63s ]; then", tmp, tmp2);
+		if (rc == 2) {
+			do_indent = true;
+		}
+
+		line = line->next;
+	}
+
+
+	fclose(fp);
+	free_file_for_updating();
+	return 0;
+}
+
+int
+game_config_save_s(const char *key, const char *val, bool flush)
+{
+	FILE *fp;
+	struct cached_field **last_p = &g_config.cached;
+	struct cached_field *cache;
+
+	assert(g_config.filename[0] != 0);
+
+	if (key == NULL) {
+		if (flush) {
+			return config_flush();
+		}
+		return 0;
+	}
+
+	cache = *last_p;
+	while (cache) {
+		if (strcmp(cache->key, key) == 0) {
+			snprintf(cache->val, sizeof(cache->val), "%s", val);
+			break;
+		}
+		last_p = &cache->next;
+		cache = *last_p;
+	}
+
+	if (!cache) {
+		cache = calloc(1, sizeof(*cache));
+		assert(cache != NULL);
+
+		snprintf(cache->key, sizeof(cache->key), "%s", key);
+		snprintf(cache->val, sizeof(cache->val), "%s", val);
+
+		*last_p = cache;
+	}
+
+	if (!flush) {
+		return 0;
+	}
+
+	return config_flush();
+}
+
+int
+game_config_save_i(const char *key, int64_t val, bool flush)
+{
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%"PRIu64, val);
+
+	return game_config_save_s(key, buf, flush);
+}
+
+int
+game_config_save_f(const char *key, float val, bool flush)
+{
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%.6f", val);
+
+	return game_config_save_s(key, buf, flush);
+}
+
+#ifdef GAME_CONFIG_TEST
+static void
+print_fn(const char *cmd, void *ctx)
+{
+	fprintf(stderr, "%s\n", cmd);
+}
+
+int
+main(void)
+{
+    game_config_set_file("test1.cfg");
+
+    game_config_save_s("set d3d8", "0", true);
+    game_config_save_s("set x", "768", false);
+    game_config_save_s("set show_mp_bar", "1", false);
+    game_config_save_s("set x2", "1111", true);
+
+	game_config_parse("Secondary", print_fn, NULL);
+}
+#endif
