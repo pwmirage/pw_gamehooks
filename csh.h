@@ -23,6 +23,7 @@ extern "C" {
  * Defines the following commands usable with csh_cmd():
  *
  * set <varname> <value>
+ * show <varname>
  * profile <profilename>
  *
  * TODO:
@@ -61,13 +62,23 @@ const char *csh_cmdf(const char *cmd, ...);
  * registered
  */
 int csh_set(const char *key, const char *val);
-
 /** Variant of csh_set() */
-int csh_set_i(const char *key, int64_t val);
+int csh_set_i(const char *key, int val);
 /** Variant of csh_set() */
 int csh_set_f(const char *key, double val);
 /** Variant of csh_set() */
 int csh_set_b(const char *key, bool val);
+/** Variant of csh_set() */
+int csh_set_b_toggle(const char *key);
+
+/** Get variable's value. NULL if unset or variable doesn't exist. */
+const char *csh_get(const char *key);
+/** Variant of csh_show() */
+int csh_get_i(const char *key);
+/** Variant of csh_show() */
+double csh_get_f(const char *key);
+/** Variant of csh_show() */
+bool csh_get_b(const char *key);
 
 /**
  * Register custom handler for commands starting with `prefix`.

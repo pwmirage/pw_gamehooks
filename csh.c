@@ -144,10 +144,37 @@ cmd_profile_fn(const char *val, void *ctx)
 	return NULL;
 }
 
+static struct csh_var *
+get_var(const char *key)
+{
+	struct csh_var *var;
+	uint32_t hash = djb2(key);
+
+	var = pw_avl_get(g_var_avl, hash);
+	while (var && strcmp(var->key, key) != 0) {
+		var = pw_avl_get_next(g_var_avl, var);
+	}
+
+	return var;
+}
+
+static const char *
+cmd_show_var_fn(const char *key, void *ctx)
+{
+	const char *ret;
+	int rc;
+
+	ret = csh_get(key);
+	if (ret == NULL) {
+		return "^ff0000Unknown variable";
+	}
+
+	return ret;
+}
+
 static const char *
 cmd_set_var_fn(const char *cmd, void *ctx)
 {
-
 	char key[64];
 	char val[64];
 	int rc;
@@ -165,21 +192,9 @@ cmd_set_var_fn(const char *cmd, void *ctx)
 	return NULL;
 }
 
-int
-csh_set(const char *key, const char *val)
+static void
+set_var_val(struct csh_var *var, const char *val)
 {
-	struct csh_var *var;
-	uint32_t hash = djb2(key);
-
-	var = pw_avl_get(g_var_avl, hash);
-	while (var && strcmp(var->key, key) != 0) {
-		var = pw_avl_get_next(g_var_avl, var);
-	}
-
-	if (!var) {
-		return -ENOENT;
-	}
-
 	switch (var->type) {
 		case CSH_T_NONE:
 			assert(false);
@@ -208,18 +223,30 @@ csh_set(const char *key, const char *val)
 			*var->d = strtod(val, NULL);
 			break;
 	}
+}
 
+int
+csh_set(const char *key, const char *val)
+{
+	struct csh_var *var;
+
+	var = get_var(key);
+	if (!var) {
+		return -ENOENT;
+	}
+
+	set_var_val(var, val);
 	var->cb_fn();
 
 	return 0;
 }
 
 int
-csh_set_i(const char *key, int64_t val)
+csh_set_i(const char *key, int val)
 {
 	char buf[32];
 
-	snprintf(buf, sizeof(buf), "%"PRId64, val);
+	snprintf(buf, sizeof(buf), "%d", val);
 	return csh_set(key, buf);
 }
 
@@ -236,6 +263,115 @@ int
 csh_set_b(const char *key, bool val)
 {
 	return csh_set_i(key, val);
+}
+
+int
+csh_set_b_toggle(const char *key)
+{
+	struct csh_var *var;
+
+	var = get_var(key);
+	if (!var) {
+		return -ENOENT;
+	}
+
+	set_var_val(var, *var->b ? "0" : "1");
+}
+
+const char *
+csh_get(const char *key)
+{
+	static char tmpbuf[64];
+	struct csh_var *var;
+
+	var = get_var(key);
+	if (!var) {
+		return NULL;
+	}
+
+	switch (var->type) {
+		case CSH_T_STRING:
+			return var->s.buf;
+		case CSH_T_DYN_STRING:
+			return *var->dyn_s ? *var->dyn_s : "(null)";
+		case CSH_T_INT:
+			snprintf(tmpbuf, sizeof(tmpbuf), "%"PRId64, var->i);
+			return tmpbuf;
+		case CSH_T_DOUBLE:
+			snprintf(tmpbuf, sizeof(tmpbuf), "%.6f", var->d);
+			return tmpbuf;
+		case CSH_T_BOOL:
+			return var->i ? "1" : "0";
+		default:
+			break;
+	}
+
+	assert(false);
+	return NULL;
+}
+
+int
+csh_get_i(const char *key)
+{
+	struct csh_var *var;
+
+	var = get_var(key);
+	if (!var) {
+		return 0;
+	}
+
+	switch (var->type) {
+		case CSH_T_STRING:
+			return var->s.buf ? strtoll(var->s.buf, NULL, 0) : 0;
+		case CSH_T_DYN_STRING:
+			return *var->dyn_s ? strtoll(*var->dyn_s, NULL, 0) : 0;
+		case CSH_T_INT:
+			return *var->i;
+		case CSH_T_BOOL:
+			return *var->i;
+		case CSH_T_DOUBLE:
+			return *var->d;
+		case CSH_T_NONE:
+			break;
+	}
+
+	assert(false);
+	return 0;
+}
+
+bool
+csh_get_b(const char *key)
+{
+	return csh_get_i(key);
+}
+
+double
+csh_get_f(const char *key)
+{
+	struct csh_var *var;
+
+	var = get_var(key);
+	if (!var) {
+		return 0;
+	}
+
+	switch (var->type) {
+		case CSH_T_STRING:
+			return var->s.buf ? strtod(var->s.buf, NULL) : 0;
+		case CSH_T_DYN_STRING:
+			return *var->dyn_s ? strtod(*var->dyn_s, NULL) : 0;
+		case CSH_T_INT:
+			return *var->i;
+		case CSH_T_BOOL:
+			return *var->i;
+		case CSH_T_DOUBLE:
+			return *var->d;
+		case CSH_T_NONE:
+			break;
+	}
+
+	assert(false);
+	return 0;
 }
 
 int
@@ -461,5 +597,6 @@ static_init(void)
 
 	csh_register_cmd("profile", cmd_profile_fn, NULL);
 	csh_register_cmd("set", cmd_set_var_fn, NULL);
+	csh_register_cmd("show", cmd_show_var_fn, NULL);
 
 }
