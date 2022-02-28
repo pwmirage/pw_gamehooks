@@ -16,11 +16,7 @@ extern bool g_settings_show;
 extern bool g_update_show;
 extern struct ImFont *g_font13;
 
-#define D3D_INIT_SETTINGS_INITIAL 1
-#define D3D_INIT_SETTINGS_PLAYER_LOAD 2
-
 int d3d_hook(void);
-void d3d_init_settings(int why);
 void d3d_unhook(void);
 LRESULT d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam);
 LRESULT d3d_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);

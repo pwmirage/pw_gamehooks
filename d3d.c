@@ -58,13 +58,6 @@ struct d3d_ptrs *g_d3d_ptrs;
 
 bool g_disable_all_overlay = false;
 
-void
-d3d_init_settings(int why)
-{
-
-}
-
-
 static unsigned __stdcall
 hooked_a3d_end_scene(void *device_d3d8)
 {
