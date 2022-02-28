@@ -44,7 +44,7 @@ int csh_register_cmd(const char *prefix, csh_cmd_handler_fn fn, void *ctx);
 
 void csh_register_var_s(const char *name, char *buf, int buflen, const char *defval);
 void csh_register_var_dyn_s(const char *name, char **var, const char *defval);
-void csh_register_var_i(const char *name, int *var, int64_t defval);
+void csh_register_var_i(const char *name, int *var, int defval);
 void csh_register_var_f(const char *name, double *var, double defval);
 void csh_register_var_b(const char *name, bool *var, bool defval);
 

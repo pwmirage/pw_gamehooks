@@ -193,7 +193,7 @@ csh_set(const char *key, const char *val)
 			assert(*var->dyn_s);
 			break;
 		case CSH_T_INT:
-			*var->i = atoi(val);
+			*var->i = strtoll(val, NULL, 0);
 			break;
 		case CSH_T_BOOL:
 			if (strcmp(val, "false") == 0) {
@@ -201,11 +201,11 @@ csh_set(const char *key, const char *val)
 			} else if (strcmp(val, "true") == 0) {
 				*var->b = true;
 			} else {
-				*var->b = atoi(val);
+				*var->b = strtoll(val, NULL, 0);
 			}
 			break;
 		case CSH_T_DOUBLE:
-			*var->d = atof(val);
+			*var->d = strtod(val, NULL);
 			break;
 	}
 
@@ -410,7 +410,7 @@ csh_register_var_dyn_s(const char *key, char **buf, const char *defval)
 }
 
 void
-csh_register_var_i(const char *key, int *val, int64_t defval)
+csh_register_var_i(const char *key, int *val, int defval)
 {
 	csh_register_var(key, (struct csh_var){ .type = CSH_T_INT, .i = val,
 			.def_val = { .i = defval } });
