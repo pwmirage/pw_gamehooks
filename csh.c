@@ -233,6 +233,12 @@ csh_set_f(const char *key, double val)
 }
 
 int
+csh_set_b(const char *key, bool val)
+{
+	return csh_set_i(key, val);
+}
+
+int
 csh_init(const char *file)
 {
 	snprintf(g_filename, sizeof(g_filename), "%s", file);

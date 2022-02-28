@@ -64,9 +64,10 @@ int csh_set(const char *key, const char *val);
 
 /** Variant of csh_set() */
 int csh_set_i(const char *key, int64_t val);
-
 /** Variant of csh_set() */
 int csh_set_f(const char *key, double val);
+/** Variant of csh_set() */
+int csh_set_b(const char *key, bool val);
 
 /**
  * Register custom handler for commands starting with `prefix`.
