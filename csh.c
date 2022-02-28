@@ -365,6 +365,32 @@ csh_register_var(const char *key, struct csh_var tmpvar)
 	memcpy(var, &tmpvar, sizeof(*var));
 	snprintf(var->key, sizeof(var->key), "%s", key);
 
+	switch (var->type) {
+		case CSH_T_NONE:
+			assert(false);
+			break;
+		case CSH_T_STRING:
+			if (var->def_val.s) {
+				snprintf(var->s.buf, var->s.len, "%s", var->def_val.s);
+			}
+			break;
+		case CSH_T_DYN_STRING:
+			if (var->def_val.s) {
+				*var->dyn_s = strdup(var->def_val.s);
+			}
+			assert(*var->dyn_s);
+			break;
+		case CSH_T_INT:
+			*var->i = var->def_val.i;
+			break;
+		case CSH_T_BOOL:
+			*var->i = var->def_val.b;
+			break;
+		case CSH_T_DOUBLE:
+			*var->d = var->def_val.d;
+			break;
+	}
+
 	pw_avl_insert(g_var_avl, hash, var);
 }
 
