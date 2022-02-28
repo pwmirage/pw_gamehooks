@@ -16,7 +16,7 @@
 
 #include "common.h"
 #include "d3d.h"
-#include "game_config.h"
+#include "csh.h"
 #include "icons_fontawesome.h"
 #include "input.h"
 #include "pw_api.h"
@@ -26,6 +26,28 @@
 extern bool g_use_borderless;
 bool g_settings_show = true;
 static int g_setting_action_id = HOTKEY_A_NONE;
+
+static struct {
+    bool r_render_nofocus;
+    bool r_borderless;
+} g_cfg;
+
+CSH_REGISTER_VAR_B("r_render_nofocus", &g_cfg.r_render_nofocus);
+CSH_REGISTER_VAR_CALLBACK("r_render_nofocus")(void) {
+    if (g_cfg.r_render_nofocus) {
+		patch_mem(0x42ba47, "\x0f\x95\xc0", 3);
+	} else {
+		patch_mem(0x42ba47, "\xc6\xc0\x01", 3);
+	}
+};
+
+static bool *g_r_head_hp_bar = (bool *)0x927d97;
+CSH_REGISTER_VAR_B("r_head_hp_bar", g_r_head_hp_bar);
+static bool *g_r_head_mp_bar = (bool *)0x927d98;
+CSH_REGISTER_VAR_B("r_head_mp_bar", g_r_head_mp_bar);
+
+CSH_REGISTER_VAR_B("r_borderless", &g_cfg.r_borderless);
+
 
 static struct {
     bool listening;
@@ -86,30 +108,10 @@ d3d_try_show_settings_win(void)
 								ImGuiWindowFlags_HorizontalScrollbar);
 
 				ImGui::Text("All changes are applied immediately");
-				check = *(uint8_t *)0x42ba47 == 0x0f;
-				if (ImGui::Checkbox("Freeze window on focus lost", &check)) {
-					game_config_set_int("Global", "render_nofocus", !check);
-					changed = true;
-					patch_mem(0x42ba47, check ? "\x0f\x95\xc0" : "\xc6\xc0\x01", 3);
-				}
-				check = !!*(uint8_t *)0x927d97;
-				if (ImGui::Checkbox("Show HP bars above entities", &check)) {
-					game_config_set_int("Global", "show_hp_bar", check);
-					changed = true;
-					*(bool *)0x927d97 = !!check;
-				}
-				check = !!*(uint8_t *)0x927d98;
-				if (ImGui::Checkbox("Show MP bars above entities", &check)) {
-					game_config_set_int("Global", "show_mp_bar", check);
-					changed = true;
-					*(bool *)0x927d98 = !!check;
-				}
-				check = g_use_borderless;
-				if (ImGui::Checkbox("Force borderless fullscreen", &check)) {
-					game_config_set_int("Global", "borderless_fullscreen", check);
-					changed = true;
-					g_use_borderless = check;
-				}
+				ImGuiW::CheckboxVar("Freeze window on focus lost", &g_cfg.r_render_nofocus, "r_render_nofocus");
+				ImGuiW::CheckboxVar("Show HP bars above entities", g_r_head_hp_bar, "r_head_hp_bar");
+				ImGuiW::CheckboxVar("Show MP bars above entities", g_r_head_mp_bar, "r_head_mp_bar");
+				ImGuiW::CheckboxVar("Force borderless fullscreen", &g_cfg.r_borderless, "r_borderless");
 
 				ImGui::SameLine(0, -1);
 				d3d_show_help_marker("Effective on next fullscreen change");
@@ -235,10 +237,6 @@ d3d_try_show_settings_win(void)
     if (!ImGui::IsPopupOpen("SetHotkey")) {
         g_setting_action_id = HOTKEY_A_NONE;
     }
-
-	if (changed) {
-		game_config_save(false);
-	}
 }
 
 bool

@@ -16,7 +16,7 @@
 
 #include "common.h"
 #include "d3d.h"
-#include "game_config.h"
+#include "csh.h"
 #include "icons_fontawesome.h"
 #include "pw_api.h"
 

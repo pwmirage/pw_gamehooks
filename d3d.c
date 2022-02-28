@@ -17,7 +17,7 @@
 #include "common.h"
 #include "pw_api.h"
 #include "d3d.h"
-#include "game_config.h"
+#include "csh.h"
 #include "extlib.h"
 #include "icons_fontawesome.h"
 
@@ -57,24 +57,11 @@ struct d3d_ptrs g_d3d8_ptrs = {
 struct d3d_ptrs *g_d3d_ptrs;
 
 bool g_disable_all_overlay = false;
-bool g_use_borderless = true;
 
 void
 d3d_init_settings(int why)
 {
-	bool show_hp = game_config_get_int("Global", "show_hp_bar", 0);
-	bool show_mp = game_config_get_int("Global", "show_mp_bar", 0);
 
-	*(bool *)0x927d97 = !!show_hp;
-	*(bool *)0x927d98 = !!show_mp;
-
-	if (why == D3D_INIT_SETTINGS_PLAYER_LOAD) {
-		return;
-	}
-
-	bool render_nofocus = game_config_get_int("Global", "render_nofocus", 0);
-	patch_mem(0x42ba47, render_nofocus ? "\xc6\xc0\x01" : "\x0f\x95\xc0", 3);
-	g_use_borderless = game_config_get_int("Global", "borderless_fullscreen", 1);
 }
 
 

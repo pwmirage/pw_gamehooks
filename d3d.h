@@ -39,6 +39,10 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
 
 #ifdef __cplusplus
 }
+
+namespace ImGuiW {
+    bool CheckboxVar(const char *label, bool *ptr, const char *var);
+}
 #endif
 
 #endif /* PW_D3D_H */

@@ -17,13 +17,12 @@
 #include "pw_api.h"
 #include "common.h"
 #include "d3d.h"
-#include "game_config.h"
+#include "csh.h"
 #include "avl.h"
 #include "pw_item_desc.h"
 #include "extlib.h"
 #include "idmap.h"
 
-extern bool g_use_borderless;
 extern unsigned g_target_dialog_pos_y;
 
 static int g_profile_id = -1;
@@ -86,18 +85,36 @@ set_borderless_fullscreen(bool is_fullscreen)
 	}
 }
 
+static struct {
+	int r_x;
+	int r_y;
+	int r_width;
+	int r_height;
+	bool r_fullscreen;
+	bool r_custom_tag_font;
+	bool r_borderless;
+} g_cfg;
+
+CSH_REGISTER_VAR_I("r_x", &g_cfg.r_x);
+CSH_REGISTER_VAR_I("r_y", &g_cfg.r_y);
+CSH_REGISTER_VAR_I("r_width", &g_cfg.r_width, 1024);
+CSH_REGISTER_VAR_I("r_height", &g_cfg.r_height, 768);
+CSH_REGISTER_VAR_B("r_fullscreen", &g_cfg.r_fullscreen);
+CSH_REGISTER_VAR_B("r_custom_tag_font", &g_cfg.r_custom_tag_font);
+CSH_REGISTER_VAR_B("r_borderless", &g_cfg.r_borderless);
+
 static void __stdcall
 setup_fullscreen_combo(void *unk1, void *unk2, unsigned *is_fullscreen)
 {
 	unsigned __stdcall (*real_fn)(void *, void *, unsigned *) = (void *)0x6d5ba0;
 
-	if (g_use_borderless) {
+	if (g_cfg.r_borderless) {
 		*is_fullscreen = g_fullscreen;
 	}
 
 	real_fn(unk1, unk2, is_fullscreen);
 
-	if (g_use_borderless) {
+	if (g_cfg.r_borderless) {
 		*is_fullscreen = 0;
 	}
 }
@@ -109,14 +126,14 @@ hooked_read_local_cfg_opt(void *unk1, const char *section, const char *name, int
 
 	if (strcmp(section, "Video") == 0) {
 		if (strcmp(name, "RenderWid") == 0) {
-			return game_config_get_int(g_profile_idstr, "width", 1366);
+			return g_cfg.r_width;
 		} else if (strcmp(name, "RenderHei") == 0) {
-			return game_config_get_int(g_profile_idstr, "height", 768);
+			return g_cfg.r_height;
 		} else if (strcmp(name, "FullScreen") == 0) {
-			if (g_use_borderless) {
+			if (g_cfg.r_borderless) {
 				return 0;
 			} else {
-				return game_config_get_int(g_profile_idstr, "fullscreen", 0);
+				return g_cfg.r_fullscreen;
 			}
 		}
 	}
@@ -124,23 +141,27 @@ hooked_read_local_cfg_opt(void *unk1, const char *section, const char *name, int
 	return ret;
 }
 
+TRAMPOLINE_FN(&pw_read_local_cfg_opt, 5, hooked_read_local_cfg_opt);
+
 static bool __thiscall
 hooked_save_local_cfg_opt(void *unk1, const char *section, const char *name, int val)
 {
 	bool ret = pw_save_local_cfg_opt(unk1, section, name, val);
 
 	if (strcmp(name, "RenderWid") == 0) {
-		return game_config_set_int(g_profile_idstr, "width", val);
+		csh_set_i("r_width", val);
 	} else if (strcmp(name, "RenderHei") == 0) {
-		return game_config_set_int(g_profile_idstr, "height", val);
+		csh_set_i("r_height", val);
 	} else if (strcmp(name, "FullScreen") == 0) {
-		if (g_use_borderless) {
+		if (g_cfg.r_borderless) {
 			val = g_fullscreen;
 		}
-		return game_config_set_int(g_profile_idstr, "fullscreen", val);
+		csh_set_i("r_fullscreen", val);
 	}
 	return ret;
 }
+
+TRAMPOLINE_FN(&pw_save_local_cfg_opt, 8, hooked_save_local_cfg_opt);
 
 static wchar_t g_win_title[128];
 static bool g_reload_title;
@@ -200,7 +221,7 @@ on_ui_change(const char *ctrl_name, struct ui_dialog *dialog)
 		} else if (strcmp(ctrl_name, "IDCANCEL") == 0) {
 			g_sel_fullscreen = g_fullscreen;
 		} else if (strcmp(ctrl_name, "apply") == 0 || strcmp(ctrl_name, "confirm") == 0) {
-			if (g_use_borderless) {
+			if (g_cfg.r_borderless) {
 				pw_log("sel: %d, real: %d\n", g_sel_fullscreen, g_fullscreen);
 				if (g_sel_fullscreen != g_fullscreen) {
 					set_borderless_fullscreen(g_sel_fullscreen);
@@ -367,7 +388,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		switch (data) {
 			case VK_LWIN:
 			case VK_RWIN:
-				if (g_use_borderless && g_fullscreen &&
+				if (g_cfg.r_borderless && g_fullscreen &&
 						GetActiveWindow() == g_window &&
 						is_mouse_over_window(5)) {
 					ShowWindow(g_window, SW_MINIMIZE);
@@ -383,7 +404,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		break;
 	case WM_SYSKEYUP:
 		if (data == VK_RETURN) {
-			if (g_use_borderless) {
+			if (g_cfg.r_borderless) {
 				set_borderless_fullscreen(!g_fullscreen);
 			}
 		}
@@ -410,7 +431,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		}
 		break;
 	case WM_KILLFOCUS:
-		if ((GetAsyncKeyState(VK_MENU) & 0x8000) && g_use_borderless && g_fullscreen &&
+		if ((GetAsyncKeyState(VK_MENU) & 0x8000) && g_cfg.r_borderless && g_fullscreen &&
 				is_mouse_over_window(5)) {
 			ShowWindow(g_window, SW_MINIMIZE);
 			g_pw_data->is_render_active = false;
@@ -452,7 +473,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 static void
 check_and_minize_win_cb(void *arg1, void *arg2)
 {
-	if (g_use_borderless && g_fullscreen && GetActiveWindow() != g_window &&
+	if (g_cfg.r_borderless && g_fullscreen && GetActiveWindow() != g_window &&
 			is_mouse_over_window(5)) {
 		ShowWindow(g_window, SW_MINIMIZE);
 		g_pw_data->is_render_active = false;
@@ -1057,11 +1078,11 @@ hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 	int rc;
 	int styles;
 
-	int x = game_config_get_int(g_profile_idstr, "x", -1);
-	int y = game_config_get_int(g_profile_idstr, "y", -1);
-	int w = game_config_get_int(g_profile_idstr, "width", -1);
-	int h = game_config_get_int(g_profile_idstr, "height", -1);
-	g_fullscreen = game_config_get_int(g_profile_idstr, "fullscreen", 0);
+	int x = g_cfg.r_x;
+	int y = g_cfg.r_y;
+	int w = g_cfg.r_width;
+	int h = g_cfg.r_height;
+	g_fullscreen = g_cfg.r_fullscreen;
 	if (w == -1 && h == -1) {
 		w = *(int *)0x927d82;
 		h = *(int *)0x927d86;
@@ -1070,7 +1091,7 @@ hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 		*(int *)0x927d86 = h;
 	}
 
-	if (g_fullscreen && g_use_borderless) {
+	if (g_fullscreen && g_cfg.r_borderless) {
 		styles = 0x80000000;
 	} else {
 		styles = 0x80ce0000;
@@ -1103,7 +1124,7 @@ hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 		return false;
 	}
 
-	if (g_use_borderless && g_fullscreen) {
+	if (g_cfg.r_borderless && g_fullscreen) {
 		patch_mem_u32(0x40beb5, 0x80000000);
 		patch_mem_u32(0x40beac, 0x80000000);
 	}
@@ -1163,7 +1184,10 @@ parse_cmdline(void)
 	char **a = params;
 	while (argc > 0) {
 		if (argc >= 2 && (strcmp(*a, "-p") == 0 || strcmp(*a, "--profile") == 0)) {
-			g_profile_id = atoi(*(a + 1));
+			char tmp[64];
+			snprintf(g_profile_idstr, sizeof(g_profile_idstr), "%s", *(a + 1));
+			snprintf(tmp, sizeof(tmp), "profile %s", g_profile_idstr);
+			csh_cmd(tmp);
 			a++;
 			argc--;
 		}
@@ -1175,8 +1199,6 @@ parse_cmdline(void)
 	if (g_profile_id == -1) {
 		g_profile_id = 1;
 	}
-	snprintf(g_profile_idstr, sizeof(g_profile_idstr), "Profile %d", g_profile_id);
-
 }
 
 static int
@@ -1189,11 +1211,12 @@ init_hooks(void)
 	parse_cmdline();
 
 	/* find and init some game data */
-	rc = game_config_parse("..\\patcher\\game.cfg");
+	rc = csh_init("..\\patcher\\game.cfg");
 	if (rc != 0) {
 		MessageBox(NULL, "Can't load the config file at ../patcher/game.cfg", "Error", MB_OK);
 		return rc;
 	}
+
 
 	rc = pw_item_desc_load("..\\patcher\\item_desc.data");
 	if (rc != 0) {
@@ -1213,7 +1236,7 @@ init_hooks(void)
 	set_pw_version();
 
 	d3d_init_settings(D3D_INIT_SETTINGS_INITIAL);
-	g_fullscreen = game_config_get_int(g_profile_idstr, "fullscreen", 0);
+	g_fullscreen = g_cfg.r_fullscreen;
 
 	/* hook into window creation (before it's actually created */
 	patch_jmp32(0x43aec8, (uintptr_t)hooked_init_window);
@@ -1221,8 +1244,6 @@ init_hooks(void)
 	/* don't let the game reset GWL_EXSTYLE to 0 */
 	patch_mem(0x40bf43, "\x81\xc4\x0c\x00\x00\x00", 6);
 
-	trampoline_fn((void **)&pw_read_local_cfg_opt, 5, hooked_read_local_cfg_opt);
-	trampoline_fn((void **)&pw_save_local_cfg_opt, 8, hooked_save_local_cfg_opt);
 	trampoline_fn((void **)&pw_load_configs, 5, hooked_pw_load_configs);
 
 	/* hook into exit */
@@ -1233,7 +1254,7 @@ init_hooks(void)
 	patch_mem(0x417aba, "\xe9", 1);
 	patch_jmp32(0x417aba, (uintptr_t)hooked_exception_handler);
 
-	if (game_config_get_int("Global", "custom_tag_font", 0)) {
+	if (g_cfg.r_custom_tag_font) {
 		HMODULE gdi_full_h = GetModuleHandle("gdi32full.dll");
 		if (!gdi_full_h) {
 			gdi_full_h = GetModuleHandle("gdi32.dll");

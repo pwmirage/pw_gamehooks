@@ -16,7 +16,7 @@
 
 #include "common.h"
 #include "d3d.h"
-#include "game_config.h"
+#include "csh.h"
 #include "icons_fontawesome.h"
 #include "pw_api.h"
 #include "extlib.h"
@@ -25,6 +25,18 @@
 
 unsigned g_target_dialog_pos_y;
 bool g_update_show;
+
+bool ImGuiW::CheckboxVar(const char *label, bool *ptr, const char *var)
+{
+    bool ret;
+
+    ret = ImGui::Checkbox(label, ptr);
+    if (ret) {
+        csh_set(var, *ptr ? "1" : "0");
+    }
+
+    return ret;
+}
 
 void
 d3d_imgui_init(void)
