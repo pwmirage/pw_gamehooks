@@ -308,6 +308,20 @@ csh_cmd(const char *usercmd)
 	return "^ff0000Unknown command.";
 }
 
+const char *
+csh_cmdf(const char *fmt, ...)
+{
+	va_list args;
+	char buf[256];
+	int len;
+
+	va_start(args, fmt);
+	len = vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+
+	return csh_cmd(buf);
+}
+
 int
 csh_register_cmd(const char *prefix, csh_cmd_handler_fn fn, void *ctx)
 {

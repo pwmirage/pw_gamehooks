@@ -36,7 +36,7 @@ typedef void (*csh_set_cb_fn)(void);
 
 int csh_init(const char *file);
 const char *csh_cmd(const char *cmd);
-const char *csh_cmdf(const char *cmd); /* TODO */
+const char *csh_cmdf(const char *cmd, ...);
 int csh_set(const char *key, const char *val);
 int csh_set_i(const char *key, int64_t val);
 int csh_set_f(const char *key, double val);
@@ -95,6 +95,7 @@ CSH_UNIQUENAME(init_csh_register_fn)(void) \
 #define CSH_REGISTER_VAR_B(...) CSH_REGISTER_VAR(b, __VA_ARGS__);
 #define CSH_REGISTER_VAR_F(...) CSH_REGISTER_VAR(f, __VA_ARGS__);
 
+/* registering var modification callbacks */
 #define CSH_REGISTER_VAR_CALLBACK(name_p) \
 static void CSH_UNIQUENAME(init_csh_register_var_cb_fn)(void); \
 static void __attribute__((constructor (106))) \
