@@ -987,10 +987,8 @@ parse_cmdline(void)
 	char **a = params;
 	while (argc > 0) {
 		if (argc >= 2 && (strcmp(*a, "-p") == 0 || strcmp(*a, "--profile") == 0)) {
-			char tmp[64];
 			snprintf(g_profile_idstr, sizeof(g_profile_idstr), "%s", *(a + 1));
-			snprintf(tmp, sizeof(tmp), "profile %s", g_profile_idstr);
-			csh_cmd(tmp);
+			csh_cmdf("profile %s", g_profile_idstr);
 			a++;
 			argc--;
 		}

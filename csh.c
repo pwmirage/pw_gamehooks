@@ -15,10 +15,9 @@
 #include <assert.h>
 
 #include "csh.h"
+#include "csh_config.h"
 #include "avl.h"
 #include "pw_api.h"
-
-static char g_filename[128];
 
 static uint32_t
 djb2(const char *str)
@@ -39,8 +38,8 @@ write_new(void)
 	FILE *fp;
 	int i, rc = 0;
 
-	assert(g_filename[0] != 0);
-	fp = fopen(g_filename, "w");
+	assert(g_csh_cfg.filename[0] != 0);
+	fp = fopen(g_csh_cfg.filename, "w");
 	if (!fp) {
 		return -errno;
 	}
@@ -236,7 +235,10 @@ csh_set(const char *key, const char *val)
 	}
 
 	set_var_val(var, val);
-	var->cb_fn();
+
+	if (var->cb_fn) {
+		var->cb_fn();
+	}
 
 	return 0;
 }
@@ -374,11 +376,18 @@ csh_get_f(const char *key)
 	return 0;
 }
 
+static void
+cfg_parse_fn(const char *cmd, void *ctx)
+{
+	csh_cmd(cmd);
+}
+
 int
 csh_init(const char *file)
 {
-	snprintf(g_filename, sizeof(g_filename), "%s", file);
-	/* TODO read config file, save its name */
+	snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "%s", file);
+
+	csh_cfg_parse(cfg_parse_fn, NULL);
 	return 0;
 }
 
