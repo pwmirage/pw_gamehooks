@@ -10,6 +10,7 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <math.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <assert.h>
 #include <wingdi.h>
@@ -22,6 +23,10 @@
 #include "pw_item_desc.h"
 #include "extlib.h"
 #include "idmap.h"
+
+#ifndef ENOSPC
+#define	ENOSPC		28	/* No space left on device */
+#endif
 
 extern unsigned g_target_dialog_pos_y;
 
@@ -148,9 +153,7 @@ static WNDPROC g_orig_event_handler;
 
 #define MG_CB_MSG (WM_USER + 165)
 
-typedef void (*mg_callback)(void *arg1, void *arg2);
-
-struct ui_thread_ctx {
+struct thread_msg_ctx {
 	mg_callback cb;
 	void *arg1;
 	void *arg2;
@@ -159,7 +162,7 @@ struct ui_thread_ctx {
 void
 pw_ui_thread_sendmsg(mg_callback cb, void *arg1, void *arg2)
 {
-	struct ui_thread_ctx *ctx = malloc(sizeof(*ctx));
+	struct thread_msg_ctx *ctx = malloc(sizeof(*ctx));
 	assert(ctx != NULL);
 	ctx->cb = cb;
 	ctx->arg1 = arg1;
@@ -170,12 +173,33 @@ pw_ui_thread_sendmsg(mg_callback cb, void *arg1, void *arg2)
 void
 pw_ui_thread_postmsg(mg_callback cb, void *arg1, void *arg2)
 {
-	struct ui_thread_ctx *ctx = malloc(sizeof(*ctx));
+	struct thread_msg_ctx *ctx = malloc(sizeof(*ctx));
 	assert(ctx != NULL);
 	ctx->cb = cb;
 	ctx->arg1 = arg1;
 	ctx->arg2 = arg2;
 	PostMessage(g_window, MG_CB_MSG, 0, (LPARAM)ctx);
+}
+
+struct ring_buffer_sp_sc *g_game_thr_queue;
+
+int
+pw_game_thr_post_msg(mg_callback fn, void *arg1, void *arg2)
+{
+	struct thread_msg_ctx *msg = calloc(1, sizeof(*msg));
+	int rc;
+
+	assert(msg != NULL);
+	msg->cb = fn;
+	msg->arg1 = arg1;
+	msg->arg2 = arg2;
+
+	rc = ring_buffer_sp_sc_push(g_game_thr_queue, msg);
+	if (rc != 0) {
+		free(msg);
+	}
+
+	return rc;
 }
 
 extern bool g_show_console;
@@ -273,7 +297,7 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		/* do not beep! */
 		return MNC_CLOSE << 16;
 	case MG_CB_MSG: {
-		struct ui_thread_ctx ctx, *org_ctx = (void *)lparam;
+		struct thread_msg_ctx ctx, *org_ctx = (void *)lparam;
 
 		ctx = *org_ctx;
 		free(org_ctx);
@@ -672,7 +696,16 @@ hooked_on_skill_end(void)
 static unsigned __thiscall
 hooked_pw_game_tick(struct game_data *game, unsigned tick_time)
 {
+	struct thread_msg_ctx *msg;
 	g_rel_time += tick_time;
+
+	/* poll one at a time */
+	msg = ring_buffer_sp_sc_pop(g_game_thr_queue);
+	if (__builtin_expect(msg != NULL, 0)) {
+		msg->cb(msg->arg1, msg->arg2);
+		free(msg);
+	}
+
 	return pw_game_tick(game, tick_time);
 }
 
@@ -1012,6 +1045,9 @@ init_hooks(void)
 
 	setup_crash_handler(append_crash_info_cb, NULL);
 
+	g_game_thr_queue = ring_buffer_sp_sc_new(32);
+	assert(g_game_thr_queue != NULL);
+
 	parse_cmdline();
 
 	/* find and init some game data */
@@ -1134,7 +1170,6 @@ init_hooks(void)
 	//trampoline_call(0x46e7a6, 6, hooked_on_skill_end);
 	//trampoline_call(0x455ce1, 6, hooked_try_cast_skill);
 	//trampoline_fn((void **)&pw_use_skill, 5, use_skill_hooked);
-	//trampoline_fn((void **)&pw_game_tick, 5, hooked_pw_game_tick);
 
 	/* silence "Invalid skill" error message when too many packets are sent */
 	//patch_mem(0x585afa, "\xeb\x12", 2);
@@ -1190,7 +1225,7 @@ hooked_pw_game_tick_init(struct game_data *game, unsigned tick_time)
 {
 	int rc;
 
-	_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)pw_game_tick);
+	_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)hooked_pw_game_tick);
 
 	/* hook into PW input handling */
 	g_orig_event_handler = *mem_region_get_u32("win_event_handler");
@@ -1210,7 +1245,6 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 	case DLL_PROCESS_ATTACH: {
 		DisableThreadLibraryCalls(mod);
 		common_static_init();
-
 
 		const char dll_disable_buf[] = "\x83\xc4\x04\x83\xc8\xff";
 
@@ -1242,6 +1276,9 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 
 		/* hook early into cfg file reading (before any window is even opened) */
 		_patch_jmp32_unsafe(0x40b016, (uintptr_t)hooked_open_local_cfg);
+
+		/* hook the game main loop */
+		_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)hooked_pw_game_tick);
 
 		return TRUE;
 	}

@@ -270,11 +270,17 @@ PW_CALL void * (*pw_alloc_item)(uint32_t id, uint32_t expire_time, uint32_t coun
 PW_CALL void * (*pw_alloc)(size_t size) PW_ADDR(0x6f5480);
 PW_CALL void (*pw_free)(void *addr) PW_ADDR(0x6f5490);
 
+typedef void (*mg_callback)(void *arg1, void *arg2);
+int pw_game_thr_post_msg(mg_callback fn, void *arg1, void *arg2);
+
+void pw_ui_thread_sendmsg(mg_callback cb, void *arg1, void *arg2);
+void pw_ui_thread_postmsg(mg_callback cb, void *arg1, void *arg2);
+
 void pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args);
 void pw_log_acolor(unsigned argb_color, const char *fmt, ...);
 void pw_log_color(unsigned rgb_color, const char *fmt, ...);
 void pw_log(const char *fmt, ...);
-void parse_console_cmd(const char *in, char *out, size_t outlen);
+int parse_console_cmd(const char *in, char *out, size_t outlen);
 
 #ifdef __cplusplus
 }
