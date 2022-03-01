@@ -264,15 +264,7 @@ backup_mem(uintptr_t addr, unsigned num_bytes)
 void
 patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes)
 {
-	char tmp[1024];
-	size_t tmplen = 0;
 	DWORD prevProt, prevProt2;
-	int i;
-
-	for (i = 0; i < num_bytes; i++) {
-		tmplen += _snprintf(tmp + tmplen, max(0, sizeof(tmp) - tmplen), "0x%x ", (unsigned char)buf[i]);
-	}
-	pw_log("patching %d bytes at 0x%x: %s", num_bytes, addr, tmp);
 
 	backup_mem(addr, num_bytes);
 	VirtualProtect((void *)addr, num_bytes, PAGE_EXECUTE_READWRITE, &prevProt);
@@ -635,7 +627,6 @@ process_static_patch_mem(struct patch_mem_t *p)
 			pw_log_color(0xFF0000, "patching %d bytes at 0x%x: assembled code takes %d bytes and doesn't fit (max %d)", len, p->addr, len, p->replaced_bytes);
 			return;
 		}
-		pw_log("patching %d bytes at 0x%x: %s", len, p->addr, p->asm_code);
 
 		memcpy(tmp, code, len);
 		if (len < p->replaced_bytes) {
@@ -646,7 +637,6 @@ process_static_patch_mem(struct patch_mem_t *p)
 	}
 	case PATCH_MEM_T_TRAMPOLINE: {
 		len = assemble_trampoline(p->addr, p->replaced_bytes, p->asm_code, &code);
-		pw_log("patching %d bytes at 0x%x: installed trampoline", len, p->addr);
 
 		/* jump to new code */
 		tmp[0] = 0xe9;
@@ -657,7 +647,6 @@ process_static_patch_mem(struct patch_mem_t *p)
 	}
 	case PATCH_MEM_T_TRAMPOLINE_FN: {
 		trampoline_fn((void **)p->addr, p->replaced_bytes, *(void **)p->asm_code);
-		pw_log("patching %d bytes at 0x%x: installed fn trampoline", len, p->addr);
 		break;
 	}
 	}
