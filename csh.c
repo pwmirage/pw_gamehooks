@@ -376,6 +376,35 @@ csh_get_f(const char *key)
 	return 0;
 }
 
+void *
+csh_get_ptr(const char *key)
+{
+	struct csh_var *var;
+
+	var = get_var(key);
+	if (!var) {
+		return NULL;
+	}
+
+	switch (var->type) {
+		case CSH_T_STRING:
+			return var->s.buf;
+		case CSH_T_DYN_STRING:
+			return var->dyn_s;
+		case CSH_T_INT:
+			return var->i;
+		case CSH_T_BOOL:
+			return var->b;
+		case CSH_T_DOUBLE:
+			return var->d;
+		case CSH_T_NONE:
+			break;
+	}
+
+	assert(false);
+	return NULL;
+}
+
 static void
 cfg_parse_fn(const char *cmd, void *ctx)
 {

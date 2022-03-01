@@ -79,6 +79,8 @@ int csh_get_i(const char *key);
 double csh_get_f(const char *key);
 /** Variant of csh_show() */
 bool csh_get_b(const char *key);
+/** Get pointer to the backing variable */
+void *csh_get_ptr(const char *key);
 
 /**
  * Register custom handler for commands starting with `prefix`.
