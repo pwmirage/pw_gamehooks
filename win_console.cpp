@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <ctype.h>
 #include <tlhelp32.h>
@@ -48,6 +49,14 @@ struct log_entry {
 	char str[0];
 };
 
+struct ring_buffer_sp_sc *g_render_thr_queue;
+
+struct thread_msg_ctx {
+	mg_callback cb;
+	void *arg1;
+	void *arg2;
+};
+
 static void
 console_init(void)
 {
@@ -66,9 +75,30 @@ console_init(void)
 
 	ring_buffer_push(g_console.cmd_history, (void *)"");
 
+    g_render_thr_queue = ring_buffer_sp_sc_new(32);
+
 	g_console.auto_scroll = true;
 	g_console.scroll_bottom = false;
 	g_console.init = true;
+}
+
+static int
+render_thr_post_msg(mg_callback fn, void *arg1, void *arg2)
+{
+	struct thread_msg_ctx *msg = (struct thread_msg_ctx *)calloc(1, sizeof(*msg));
+	int rc;
+
+	assert(msg != NULL);
+	msg->cb = fn;
+	msg->arg1 = arg1;
+	msg->arg2 = arg2;
+
+	rc = ring_buffer_sp_sc_push(g_render_thr_queue, msg);
+	if (rc != 0) {
+		free(msg);
+	}
+
+	return rc;
 }
 
 void
@@ -255,14 +285,54 @@ console_text_cb(ImGuiInputTextCallbackData* data)
 }
 
 static void
+print_cmd_response(void *_str, void *unused)
+{
+    const char *resp = (char *)_str;
+
+    assert(_str != NULL);
+
+    uint32_t color = 0xFFFFFFFF;
+    if (resp[0] == '^') {
+        const char *new_resp;
+        color = (0xFF << 24) | strtoll(resp + 1, (char **)&new_resp, 16);
+        resp = new_resp;
+    }
+    d3d_console_argb_printf(color, "%s\n", resp);
+
+    free(_str);
+}
+
+static void
+exec_cmd_on_game_thread(void *_cmdline, void *unusd)
+{
+    char *cmdline = (char *)_cmdline;
+    char buf[256];
+    int rc = rc;
+
+	rc = parse_console_cmd(cmdline, buf, sizeof(buf));
+	if (rc == 0 && g_pw_data && g_pw_data->game && g_pw_data->game->ui &&
+		g_pw_data->game->ui->ui_manager && g_pw_data->game->logged_in == 2) {
+			pw_console_parse_cmd(buf);
+			pw_console_exec_cmd(g_pw_data->game->ui->ui_manager);
+	} else {
+        const char *resp = csh_cmd(buf);
+        if (resp[0] != 0) {
+            render_thr_post_msg(print_cmd_response, strdup(resp), NULL);
+        }
+    }
+    free(cmdline);
+}
+
+static void
 console_exec_cmd(const char* cmdline)
 {
 	void *prev;
 	char *cmd;
     void *cmd_v;
 	char buf[512];
+    int rc;
 
-	d3d_console_argb_printf(0xFFFFFFFF, "# %s\n", cmdline);
+	d3d_console_argb_printf(0xFFFFFFFF, "$ %s\n", cmdline);
 
 	g_console.history_pos = -1;
 	RING_BUFFER_FOREACH_REVERSE(g_console.cmd_history, &cmd_v) {
@@ -305,14 +375,10 @@ console_exec_cmd(const char* cmdline)
 		return;
 	}
 
-	parse_console_cmd(cmdline, buf, sizeof(buf));
-	cmdline = buf;
+    cmdline = strdup(cmdline);
+    assert(cmdline != NULL);
 
-	if (g_pw_data && g_pw_data->game && g_pw_data->game->ui &&
-		g_pw_data->game->ui->ui_manager && g_pw_data->game->logged_in == 2) {
-			pw_console_parse_cmd(cmdline);
-			pw_console_exec_cmd(g_pw_data->game->ui->ui_manager);
-	}
+    pw_game_thr_post_msg(exec_cmd_on_game_thread, (void *)cmdline, NULL);
 }
 
 
@@ -328,6 +394,14 @@ void
 d3d_try_show_console(void)
 {
 	static bool copy_to_clipboard = false;
+	struct thread_msg_ctx *msg;
+
+	/* poll one at a time */
+	msg = (struct thread_msg_ctx *)ring_buffer_sp_sc_pop(g_render_thr_queue);
+	if (__builtin_expect(msg != NULL, 0)) {
+		msg->cb(msg->arg1, msg->arg2);
+		free(msg);
+	}
 
 	if (!g_show_console) {
 		return;
@@ -422,6 +496,11 @@ d3d_try_show_console(void)
 		reclaim_focus = true;
 	}
 
+	// Auto-focus on window apparition
+	ImGui::SetItemDefaultFocus();
+	if (reclaim_focus)
+		ImGui::SetKeyboardFocusHere(-1); // Auto focus previous widget
+
 	ImGui::SameLine(0, -1);
 
 	g_console.filter.Draw("", 60);
@@ -448,11 +527,6 @@ d3d_try_show_console(void)
 	}
 
 	ImGui::SameLine(0, -1);
-
-	// Auto-focus on window apparition
-	ImGui::SetItemDefaultFocus();
-	if (reclaim_focus)
-		ImGui::SetKeyboardFocusHere(-1); // Auto focus previous widget
 
 	ImGui::End();
 }

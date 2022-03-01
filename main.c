@@ -379,12 +379,12 @@ hooked_pw_load_configs(struct game_data *game, void *unk1, int unk2)
 }
 
 /* TODO tidy up */
-void
+int
 parse_console_cmd(const char *in, char *out, size_t outlen)
 {
-
 	if (_strnicmp(in, "d ", 2) == 0) {
 		_snprintf(out, outlen, "d_c2scmd %s", in + 2);
+		return 0;
 	} else if (_strnicmp(in, "di ", 3) == 0) {
 		struct pw_idmap_el *node;
 		unsigned pid = 0, id = 0;
@@ -406,8 +406,10 @@ parse_console_cmd(const char *in, char *out, size_t outlen)
 		} else {
 			_snprintf(out, outlen, "d_c2scmd 10800 %s", in);
 		}
+		return 0;
 	} else {
 		_snprintf(out, outlen, "%s", in);
+		return -1;
 	}
 }
 
@@ -960,7 +962,7 @@ hooked_init_window(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 		return false;
 	}
 
-	if (is_borderless && is_fullscreen) {
+	if (is_borderless) {
 		patch_mem_u32(0x40beb5, 0x80000000);
 		patch_mem_u32(0x40beac, 0x80000000);
 	}

@@ -32,15 +32,23 @@ static struct {
 	bool r_borderless;
 } g_cfg;
 
+CSH_REGISTER_VAR_I("r_x", &g_cfg.r_x);
+CSH_REGISTER_VAR_I("r_y", &g_cfg.r_y);
+CSH_REGISTER_VAR_I("r_width", &g_cfg.r_width, 1024);
+CSH_REGISTER_VAR_I("r_height", &g_cfg.r_height, 768);
+CSH_REGISTER_VAR_B("r_fullscreen", &g_cfg.r_fullscreen);
+CSH_REGISTER_VAR_B("r_borderless", &g_cfg.r_borderless);
+
 struct rect {
 	int x, y, w, h;
 };
 
 static struct rect g_window_size;
 
-CSH_REGISTER_VAR_CALLBACK("r_borderless")(void)
+static void
+set_fullscreen_cb(void *arg1, void *arg2)
 {
-	RECT rect;
+    RECT rect;
 
 	if (g_window_size.w == 0 || g_cfg.r_fullscreen) {
 		/* save window position & dimensions */
@@ -50,12 +58,6 @@ CSH_REGISTER_VAR_CALLBACK("r_borderless")(void)
 		g_window_size.w = rect.right - rect.left;
 		g_window_size.h = rect.bottom - rect.top;
 	}
-
-	int style = g_cfg.r_borderless ? 0x80000000 : 0x80ce0000;
-
-	patch_mem_u32(0x40beb5, style);
-	patch_mem_u32(0x40beac, style);
-	SetWindowLong(g_window, GWL_STYLE, style);
 
 	if (g_cfg.r_fullscreen) {
 		int fw, fh;
@@ -73,12 +75,25 @@ CSH_REGISTER_VAR_CALLBACK("r_borderless")(void)
 	}
 }
 
-CSH_REGISTER_VAR_I("r_x", &g_cfg.r_x);
-CSH_REGISTER_VAR_I("r_y", &g_cfg.r_y);
-CSH_REGISTER_VAR_I("r_width", &g_cfg.r_width, 1024);
-CSH_REGISTER_VAR_I("r_height", &g_cfg.r_height, 768);
-CSH_REGISTER_VAR_B("r_fullscreen", &g_cfg.r_fullscreen);
-CSH_REGISTER_VAR_B("r_borderless", &g_cfg.r_borderless);
+CSH_REGISTER_VAR_CALLBACK("r_fullscreen")(void)
+{
+    pw_ui_thread_postmsg(set_fullscreen_cb, NULL, NULL);
+}
+
+static void
+set_borderless_cb(void *arg1, void *arg2)
+{
+	unsigned style = g_cfg.r_borderless ? 0x80000000 : 0x80ce0000;
+    patch_mem_u32(0x40beb5, style);
+	patch_mem_u32(0x40beac, style);
+	SetWindowLong(g_window, GWL_STYLE, style);
+    ShowWindow(g_window, 1);
+}
+
+CSH_REGISTER_VAR_CALLBACK("r_borderless")(void)
+{
+    pw_ui_thread_postmsg(set_borderless_cb, NULL, NULL);
+}
 
 static void __stdcall
 setup_fullscreen_combo(void *unk1, void *unk2, unsigned *is_fullscreen)
