@@ -83,6 +83,81 @@ ring_buffer_alloc(size_t size)
 	return ring;
 }
 
+struct ring_buffer_sp_sc {
+	uint32_t head;
+	uint32_t tail;
+	uint32_t size;
+	void *buf[0];
+};
+
+int
+ring_buffer_sp_sc_push(struct ring_buffer_sp_sc *ring, void *val)
+{
+	uint32_t head, tail;
+	uint32_t free_count;
+
+	if (!malloc) {
+		return -ENOMEM;
+	}
+
+	head = ring->head;
+	__asm__("" ::: "memory"); /* rmb() - noop on x86 */
+	tail = ring->tail;
+
+	free_count = (ring->size + tail - head);
+	if (free_count == 0) {
+		return -ENOSPC;
+	}
+
+	ring->buf[head & (ring->size - 1)] = val;
+	__asm__("" ::: "memory"); /* wmb() */
+	ring->head = head + 1;
+	return 0;
+}
+
+void *
+ring_buffer_sp_sc_pop(struct ring_buffer_sp_sc *ring)
+{
+	uint32_t head, tail;
+	uint32_t avail_count;
+	void *ret;
+
+	tail = ring->tail;
+	__asm__("" ::: "memory"); /* rmb() - noop on x86 */
+	head = ring->head;
+
+	avail_count = tail - head;
+	if (avail_count == 0) {
+		return NULL;
+	}
+
+	ret = ring->buf[tail & (ring->size - 1)];
+
+	__asm__("mfence" ::: "memory"); /* mb() - make sure we read before we write */
+	ring->tail = tail + 1;
+
+	return ret;
+}
+
+int
+ring_buffer_sp_sc_size(struct ring_buffer_sp_sc *ring)
+{
+	return ring->size;
+}
+
+struct ring_buffer_sp_sc *
+ring_buffer_sp_sc_new(int count)
+{
+	struct ring_buffer_sp_sc *ret = calloc(1, sizeof(*ret) + sizeof(void *) * count);
+
+	if (!ret) {
+		return NULL;
+	}
+
+	ret->size = count;
+	return ret;
+}
+
 struct mem_region_4kb {
 	char data[4096];
 	/* which bytes were overwritten */

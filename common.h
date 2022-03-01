@@ -72,6 +72,11 @@ void u32_to_str(char *buf, uint32_t u32);
 void restore_mem(void);
 int assemble_x86(uint32_t addr, const char *in, unsigned char **out);
 
+struct ring_buffer_sp_sc *ring_buffer_sp_sc_new(int count);
+int ring_buffer_sp_sc_push(struct ring_buffer_sp_sc *ring, void *val);
+void *ring_buffer_sp_sc_pop(struct ring_buffer_sp_sc *ring);
+int ring_buffer_sp_sc_size(struct ring_buffer_sp_sc *ring);
+
 /* patch executable memory without making backups */
 void _patch_mem_unsafe(uintptr_t addr, const char *buf, unsigned num_bytes);
 void _patch_mem_u32_unsafe(uintptr_t addr, uint32_t u32);
