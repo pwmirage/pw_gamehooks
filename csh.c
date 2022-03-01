@@ -140,7 +140,7 @@ cmd_profile_fn(const char *val, void *ctx)
 	}
 
 	snprintf(g_profile, sizeof(g_profile), "%s", val);
-	return NULL;
+	return "";
 }
 
 static struct csh_var *
@@ -188,7 +188,7 @@ cmd_set_var_fn(const char *cmd, void *ctx)
 		return "^ff0000Unknown variable.";
 	}
 
-	return NULL;
+	return "";
 }
 
 static void
@@ -297,13 +297,13 @@ csh_get(const char *key)
 		case CSH_T_DYN_STRING:
 			return *var->dyn_s ? *var->dyn_s : "(null)";
 		case CSH_T_INT:
-			snprintf(tmpbuf, sizeof(tmpbuf), "%"PRId64, var->i);
+			snprintf(tmpbuf, sizeof(tmpbuf), "%"PRId64, *var->i);
 			return tmpbuf;
 		case CSH_T_DOUBLE:
-			snprintf(tmpbuf, sizeof(tmpbuf), "%.6f", var->d);
+			snprintf(tmpbuf, sizeof(tmpbuf), "%.6f", *var->d);
 			return tmpbuf;
 		case CSH_T_BOOL:
-			return var->i ? "1" : "0";
+			return *var->b ? "1" : "0";
 		default:
 			break;
 	}
@@ -330,7 +330,7 @@ csh_get_i(const char *key)
 		case CSH_T_INT:
 			return *var->i;
 		case CSH_T_BOOL:
-			return *var->i;
+			return *var->b;
 		case CSH_T_DOUBLE:
 			return *var->d;
 		case CSH_T_NONE:
@@ -365,7 +365,7 @@ csh_get_f(const char *key)
 		case CSH_T_INT:
 			return *var->i;
 		case CSH_T_BOOL:
-			return *var->i;
+			return *var->b;
 		case CSH_T_DOUBLE:
 			return *var->d;
 		case CSH_T_NONE:
@@ -510,6 +510,9 @@ csh_register_var(const char *key, struct csh_var tmpvar)
 	struct csh_var *var;
 	uint32_t hash = djb2(key);
 
+	var = get_var(key);
+	assert(var == NULL);
+
 	var = pw_avl_alloc(g_var_avl);
 	assert(var);
 
@@ -535,7 +538,7 @@ csh_register_var(const char *key, struct csh_var tmpvar)
 			*var->i = var->def_val.i;
 			break;
 		case CSH_T_BOOL:
-			*var->i = var->def_val.b;
+			*var->b = var->def_val.b;
 			break;
 		case CSH_T_DOUBLE:
 			*var->d = var->def_val.d;
