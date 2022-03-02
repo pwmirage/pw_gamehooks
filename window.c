@@ -121,6 +121,9 @@ CSH_REGISTER_VAR_CALLBACK("r_borderless")(void)
     }
 }
 
+/* don't alter window sizing; don't force 16:9 */
+PATCH_MEM(0x42bb92, 2, "nop; nop");
+
 static void __stdcall
 setup_fullscreen_combo(void *unk1, void *unk2, unsigned *is_fullscreen)
 {
