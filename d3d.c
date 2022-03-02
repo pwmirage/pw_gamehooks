@@ -58,6 +58,9 @@ struct d3d_ptrs *g_d3d_ptrs;
 
 bool g_disable_all_overlay = false;
 
+static bool g_show_imgui_demo;
+CSH_REGISTER_VAR_B("r_imgui_demo", &g_show_imgui_demo);
+
 static unsigned __stdcall
 hooked_a3d_end_scene(void *device_d3d8)
 {
@@ -92,7 +95,9 @@ hooked_a3d_end_scene(void *device_d3d8)
 		d3d_try_show_update_win();
 		d3d_try_show_console();
 
-		//igShowDemoWindow(NULL);
+		if (g_show_imgui_demo) {
+			igShowDemoWindow(NULL);
+		}
 	}
 
 	igGetIO()->MouseDrawCursor = false;
