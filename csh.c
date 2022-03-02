@@ -297,7 +297,7 @@ csh_get(const char *key)
 		case CSH_T_DYN_STRING:
 			return *var->dyn_s ? *var->dyn_s : "(null)";
 		case CSH_T_INT:
-			snprintf(tmpbuf, sizeof(tmpbuf), "%"PRId64, *var->i);
+			snprintf(tmpbuf, sizeof(tmpbuf), "%d", *var->i);
 			return tmpbuf;
 		case CSH_T_DOUBLE:
 			snprintf(tmpbuf, sizeof(tmpbuf), "%.6f", *var->d);
