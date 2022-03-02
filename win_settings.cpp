@@ -98,27 +98,52 @@ d3d_try_show_settings_win(void)
 	ImGui::PopStyleColor(3);
 
 	if (ImGui::BeginTabBar("MainTabs", ImGuiTabBarFlags_None)) {
-		if (ImGui::BeginTabItem("Gameplay", NULL, ImGuiTabBarFlags_None)) {
-				ImGui::BeginChild("ScrollingRegion", {0, 0}, false,
-								ImGuiWindowFlags_HorizontalScrollbar);
+		if (ImGui::BeginTabItem("Rendering", NULL, ImGuiTabBarFlags_None)) {
+			ImGui::BeginChild("ScrollingRegion", {0, -30}, false,
+							ImGuiWindowFlags_HorizontalScrollbar);
 
-				ImGui::Text("All changes are applied immediately");
-				ImGuiW_CheckboxVar("r_render_nofocus", "Freeze window on focus lost");
-				ImGuiW_CheckboxVar("r_head_hp_bar", "Show HP bars above entities");
-				ImGuiW_CheckboxVar("r_head_mp_bar", "Show MP bars above entities");
-				ImGuiW_CheckboxVar("r_borderless", "Borderless window");
 
-				ImGui::SameLine(0, -1);
-				d3d_show_help_marker("Set when fullscreen to have borderless fullscreen.");
 
-				if (ImGui::Button("Close", {80, 22})) {
-					g_settings_show = false;
+			const char* items[] = { "Windowed", "Borderless Fullscreen", "Fullscreen" };
+			static int item_current_idx = 0;
+			const char* combo_label = items[item_current_idx];
+
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("Fullscreen:");
+			ImGui::SameLine();
+
+			ImGui::SetNextItemWidth(200);
+			ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 5));
+			if (ImGui::BeginCombo("###fullscreen_combo", combo_label, 0))
+			{
+				for (int n = 0; n < IM_ARRAYSIZE(items); n++)
+				{
+					const bool is_selected = (item_current_idx == n);
+					if (ImGui::Selectable(items[n], is_selected))
+						item_current_idx = n;
+
+					// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+					if (is_selected)
+						ImGui::SetItemDefaultFocus();
 				}
-				ImGui::EndChild();
-				ImGui::EndTabItem();
+				ImGui::EndCombo();
+			}
+			ImGui::PopStyleVar(2);
+
+			ImGuiW_CheckboxVar("r_render_nofocus", "Freeze window on focus lost");
+			ImGuiW_CheckboxVar("r_head_hp_bar", "Show HP bars above entities");
+			ImGuiW_CheckboxVar("r_head_mp_bar", "Show MP bars above entities");
+			ImGuiW_CheckboxVar("r_borderless", "Borderless window");
+
+			ImGui::SameLine();
+			d3d_show_help_marker("This is set automatically when \"Borderless fullscreen\" is set,\nbut may be useful in other cases too, e.g. to run two\nsemi-fullscreen clients side by side.");
+
+			ImGui::EndChild();
+			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Hotkeys", NULL, ImGuiTabBarFlags_None)) {
-			ImGui::BeginChild("ScrollingRegion", {0, 0}, false,
+			ImGui::BeginChild("ScrollingRegion", {0, -30}, false,
 							ImGuiWindowFlags_HorizontalScrollbar);
 
 			if (ImGui::BeginTable("table1", 3)) {
@@ -154,6 +179,24 @@ d3d_try_show_settings_win(void)
 			ImGui::EndTabItem();
 		}
 		ImGui::EndTabBar();
+	}
+
+	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3);
+
+	if (ImGui::Button("Apply", {80, 22})) {
+		g_settings_show = false;
+	}
+
+	ImGui::SameLine();
+
+	if (ImGui::Button("Confirm", {80, 22})) {
+		g_settings_show = false;
+	}
+
+	ImGui::SameLine();
+
+	if (ImGui::Button("Cancel", {80, 22})) {
+		g_settings_show = false;
 	}
 
 	ImGui::End();
