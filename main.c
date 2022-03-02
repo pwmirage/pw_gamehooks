@@ -1253,13 +1253,12 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 		d3d_hook();
 
 		if (memcmp((void *)(uintptr_t)0x43abd9, dll_disable_buf, 6) == 0) {
-			g_window = *(HWND *)(uintptr_t)0x927f60;
-
 			rc = init_hooks();
 			if (rc != 0) {
 				return 0;
 			}
 
+			g_window = *(HWND *)(uintptr_t)0x927f60;
 			_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)hooked_pw_game_tick_init);
 			return TRUE;
 		}

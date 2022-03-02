@@ -77,22 +77,48 @@ set_fullscreen_cb(void *arg1, void *arg2)
 
 CSH_REGISTER_VAR_CALLBACK("r_fullscreen")(void)
 {
-    pw_ui_thread_postmsg(set_fullscreen_cb, NULL, NULL);
+    if (g_window) {
+        pw_ui_thread_postmsg(set_fullscreen_cb, NULL, NULL);
+    }
 }
 
 static void
 set_borderless_cb(void *arg1, void *arg2)
 {
-	unsigned style = g_cfg.r_borderless ? 0x80000000 : 0x80ce0000;
+    static RECT size_wo_borders;
+    static RECT size_w_borders;
+
+    int w, h, x, y;
+
+    unsigned style = g_cfg.r_borderless ? 0x80000000 : 0x80ce0000;
     patch_mem_u32(0x40beb5, style);
-	patch_mem_u32(0x40beac, style);
-	SetWindowLong(g_window, GWL_STYLE, style);
-    ShowWindow(g_window, 1);
+    patch_mem_u32(0x40beac, style);
+
+    GetClientRect(g_window, &size_wo_borders);
+    GetWindowRect(g_window, &size_w_borders);
+
+    if (g_cfg.r_borderless) {
+        w = size_w_borders.right - size_w_borders.left;
+        h = size_w_borders.bottom - size_w_borders.top;
+        x = size_w_borders.left;
+        y = size_w_borders.top;
+        SetWindowLong(g_window, GWL_STYLE, style);
+		SetWindowPos(g_window, NULL, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+    } else  {
+        w = size_w_borders.right - size_w_borders.left;
+        h = size_w_borders.bottom - size_w_borders.top;
+        x = size_w_borders.left;
+        y = size_w_borders.top;
+        SetWindowLong(g_window, GWL_STYLE, style);
+		SetWindowPos(g_window, NULL, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+    }
 }
 
 CSH_REGISTER_VAR_CALLBACK("r_borderless")(void)
 {
-    pw_ui_thread_postmsg(set_borderless_cb, NULL, NULL);
+    if (g_window) {
+        pw_ui_thread_postmsg(set_borderless_cb, NULL, NULL);
+    }
 }
 
 static void __stdcall
