@@ -133,7 +133,8 @@ ring_buffer_sp_sc_pop(struct ring_buffer_sp_sc *ring)
 
 	ret = ring->buf[tail & (ring->size - 1)];
 
-	__asm__("mfence" ::: "memory"); /* mb() - make sure we read before we write */
+	__asm__("" ::: "memory"); /* mb() - make sure we read before we write,
+								 although not needed on x86. */
 	ring->tail = tail + 1;
 
 	return ret;
