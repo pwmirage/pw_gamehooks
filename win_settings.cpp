@@ -28,8 +28,6 @@ static int g_setting_action_id = HOTKEY_A_NONE;
 
 static struct {
     bool r_render_nofocus;
-    bool initialized;
-    bool *r_borderless;
 } g_cfg;
 
 CSH_REGISTER_VAR_B("r_render_nofocus", &g_cfg.r_render_nofocus);
@@ -66,11 +64,6 @@ d3d_try_show_settings_win(void)
 	if (!g_settings_show) {
 		return;
 	}
-
-    if (!g_cfg.initialized) {
-        g_cfg.r_borderless = (bool *)csh_get_ptr("r_borderless");
-        g_cfg.initialized = true;
-    }
 
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImVec2 work_size = viewport->WorkSize;
@@ -110,10 +103,10 @@ d3d_try_show_settings_win(void)
 								ImGuiWindowFlags_HorizontalScrollbar);
 
 				ImGui::Text("All changes are applied immediately");
-				ImGuiW::CheckboxVar("Freeze window on focus lost", &g_cfg.r_render_nofocus, "r_render_nofocus");
-				ImGuiW::CheckboxVar("Show HP bars above entities", g_r_head_hp_bar, "r_head_hp_bar");
-				ImGuiW::CheckboxVar("Show MP bars above entities", g_r_head_mp_bar, "r_head_mp_bar");
-				ImGuiW::CheckboxVar("Force borderless fullscreen", g_cfg.r_borderless, "r_borderless");
+				ImGuiW_CheckboxVar("r_render_nofocus", "Freeze window on focus lost");
+				ImGuiW_CheckboxVar("r_head_hp_bar", "Show HP bars above entities");
+				ImGuiW_CheckboxVar("r_head_mp_bar", "Show MP bars above entities");
+				ImGuiW_CheckboxVar("r_borderless", "Force borderless fullscreen");
 
 				ImGui::SameLine(0, -1);
 				d3d_show_help_marker("Effective on next fullscreen change");

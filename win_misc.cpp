@@ -26,18 +26,6 @@
 unsigned g_target_dialog_pos_y;
 bool g_update_show;
 
-bool ImGuiW::CheckboxVar(const char *label, bool *ptr, const char *var)
-{
-    bool ret;
-
-    ret = ImGui::Checkbox(label, ptr);
-    if (ret) {
-        csh_set(var, *ptr ? "1" : "0");
-    }
-
-    return ret;
-}
-
 void
 d3d_imgui_init(void)
 {

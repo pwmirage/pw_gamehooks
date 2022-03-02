@@ -36,9 +36,21 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
 #ifdef __cplusplus
 }
 
-namespace ImGuiW {
-    bool CheckboxVar(const char *label, bool *ptr, const char *var);
-}
+/** c++ doesn't accept char* as template arguments, so use a macro */
+#define ImGuiW_CheckboxVar(varname, label) \
+({ \
+    static bool *ptr = NULL; \
+    bool ret; \
+    if (ptr == NULL) { \
+        ptr = (bool *)csh_get_ptr(varname); \
+        assert(ptr != NULL); \
+    } \
+    ret = ImGui::Checkbox(label, ptr); \
+    if (ret) { \
+        csh_set(varname, *ptr ? "1" : "0"); \
+    } \
+    ret; \
+})
 #endif
 
 #endif /* PW_D3D_H */
