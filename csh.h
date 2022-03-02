@@ -122,6 +122,7 @@ void csh_register_var_callback(const char *name, csh_set_cb_fn fn);
 #define _CSH_JOIN2(a, b) a ## _ ## b
 #define CSH_JOIN2(a, b) _CSH_JOIN2(a, b)
 #define CSH_UNIQUENAME(str) CSH_JOIN2(str, __LINE__)
+#define GET_3RD_ARG(arg1, arg2, arg3, ...) arg3
 #define GET_5TH_ARG(arg1, arg2, arg3, arg4, arg5, ...) arg5
 
 
@@ -141,7 +142,7 @@ CSH_UNIQUENAME(init_csh_register_fn)(void) \
 
 /** Statically register a string variable (non-dynamic) */
 #define CSH_REGISTER_VAR_S(...) \
-    _CSH_REGISTER_VAR_S_CHOOSER(__VA_ARGS__)(__VA_ARGS)
+    _CSH_REGISTER_VAR_S_CHOOSER(__VA_ARGS__)(__VA_ARGS__)
 
 
 /* registering every other T_* with optional default value */
@@ -172,7 +173,7 @@ CSH_UNIQUENAME(init_csh_register_fn)(void) \
 
 
 /** Statically register a variable modification callback */
-#define CSH_REGISTER_VAR_CALLBACK(name_p) \
+#define _CSH_REGISTER_VAR_CALLBACK_INLINE(name_p) \
 static void CSH_UNIQUENAME(init_csh_register_var_cb_fn)(void); \
 static void __attribute__((constructor (106))) \
 CSH_UNIQUENAME(init_csh_register_var_fn)(void) \
@@ -180,6 +181,20 @@ CSH_UNIQUENAME(init_csh_register_var_fn)(void) \
     csh_register_var_callback(name_p, CSH_UNIQUENAME(init_csh_register_var_cb_fn)); \
 } \
 static void CSH_UNIQUENAME(init_csh_register_var_cb_fn)
+
+#define _CSH_REGISTER_VAR_CALLBACK(name_p, cb_fn_p) \
+static void __attribute__((constructor (106))) \
+CSH_UNIQUENAME(init_csh_register_var_fn)(void) \
+{ \
+    csh_register_var_callback(name_p, cb_fn_p); \
+}
+
+#define _CSH_REGISTER_VAR_CALLBACK_CHOOSER(...) \
+    GET_3RD_ARG(__VA_ARGS__, _CSH_REGISTER_VAR_CALLBACK, _CSH_REGISTER_VAR_CALLBACK_INLINE, )
+
+
+#define CSH_REGISTER_VAR_CALLBACK(...) \
+    _CSH_REGISTER_VAR_CALLBACK_CHOOSER(__VA_ARGS__)(__VA_ARGS__)
 
 #ifdef __cplusplus
 }
