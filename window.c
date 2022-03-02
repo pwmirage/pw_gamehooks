@@ -85,9 +85,7 @@ CSH_REGISTER_VAR_CALLBACK("r_fullscreen")(void)
 static void
 set_borderless_cb(void *arg1, void *arg2)
 {
-    static RECT size_wo_borders;
     static RECT size_w_borders;
-
     int w, h, x, y, fw, fh;
 
     unsigned style = g_cfg.r_borderless ? 0x80000000 : 0x80ce0000;
@@ -96,7 +94,6 @@ set_borderless_cb(void *arg1, void *arg2)
 
     fw = GetSystemMetrics(SM_CXSCREEN);
     fh = GetSystemMetrics(SM_CYSCREEN);
-    GetClientRect(g_window, &size_wo_borders);
     GetWindowRect(g_window, &size_w_borders);
 
     w = size_w_borders.right - size_w_borders.left;
@@ -133,8 +130,68 @@ CSH_REGISTER_VAR_CALLBACK("r_borderless")(void)
     }
 }
 
+enum {
+    DIM_CHANGE_NONE = 0,
+    DIM_CHANGE_X,
+    DIM_CHANGE_Y,
+    DIM_CHANGE_WIDTH,
+    DIM_CHANGE_HEIGHT,
+};
+
+static void
+window_size_pos_changed_cb(void *_idchanged, void *arg2)
+{
+    static RECT size_w_borders;
+    int w, h, x, y, fw, fh;
+    int idchanged = (int)(intptr_t)_idchanged;
+
+    GetWindowRect(g_window, &size_w_borders);
+
+    w = size_w_borders.right - size_w_borders.left;
+    h = size_w_borders.bottom - size_w_borders.top;
+    x = size_w_borders.left;
+    y = size_w_borders.top;
+
+    switch (idchanged) {
+    case DIM_CHANGE_X:
+        x = csh_get_i("r_x");
+        break;
+    case DIM_CHANGE_Y:
+        y = csh_get_i("r_y");
+        break;
+    case DIM_CHANGE_WIDTH:
+        w = csh_get_i("r_width");
+        break;
+    case DIM_CHANGE_HEIGHT:
+        h = csh_get_i("r_height");
+        break;
+    default:
+        break;
+    }
+
+    SetWindowPos(g_window, NULL, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+}
+
+static void
+on_window_size_pos_changed(int id)
+{
+    if (g_window) {
+        pw_ui_thread_postmsg(window_size_pos_changed_cb, (void *)(intptr_t)id, NULL);
+    }
+}
+
+CSH_REGISTER_VAR_CALLBACK("r_x")(void) { on_window_size_pos_changed(DIM_CHANGE_X); }
+CSH_REGISTER_VAR_CALLBACK("r_y")(void) { on_window_size_pos_changed(DIM_CHANGE_Y); }
+CSH_REGISTER_VAR_CALLBACK("r_width")(void) { on_window_size_pos_changed(DIM_CHANGE_WIDTH); }
+CSH_REGISTER_VAR_CALLBACK("r_height")(void) { on_window_size_pos_changed(DIM_CHANGE_HEIGHT); }
+
 /* don't alter window sizing; don't force 16:9 */
 PATCH_MEM(0x42bb92, 2, "nop; nop");
+
+/* set minimal window dimension 800x468 */
+TRAMPOLINE(0x42bd0c, 6,
+        "mov dword ptr [eax + 0x18], 800;"
+        "mov dword ptr [eax + 0x1c], 468;");
 
 static void __stdcall
 setup_fullscreen_combo(void *unk1, void *unk2, unsigned *is_fullscreen)
