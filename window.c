@@ -141,7 +141,7 @@ enum {
 static void
 window_size_pos_changed_cb(void *_idchanged, void *arg2)
 {
-    static RECT size_w_borders;
+    RECT size_w_borders;
     int w, h, x, y, fw, fh;
     int idchanged = (int)(intptr_t)_idchanged;
 
@@ -192,6 +192,62 @@ PATCH_MEM(0x42bb92, 2, "nop; nop");
 TRAMPOLINE(0x42bd0c, 6,
         "mov dword ptr [eax + 0x18], 800;"
         "mov dword ptr [eax + 0x1c], 468;");
+
+static bool g_border_size_set;
+
+static void __cdecl
+hooked_on_window_resize(int w, int h)
+{
+    g_cfg.r_width = w;
+    g_cfg.r_height = h;
+
+    /* reset it, either because of borderless change on fullscreen switch */
+    g_border_size_set = false;
+}
+
+TRAMPOLINE(0x42b918, 6,
+    "push edx;"
+    "push ecx;"
+    "push eax;"
+    "call 0x%x;"
+    "pop eax;"
+    "pop ecx;"
+    "pop edx;"
+    "call org;",
+    hooked_on_window_resize);
+
+static void __stdcall
+hooked_on_windows_move(uint32_t lparam)
+{
+    static int bw, bh;
+    int16_t x = lparam & 0xffff;
+    int16_t y = lparam >> 16;
+
+    if (!g_border_size_set) {
+        RECT size_w_borders;
+        GetWindowRect(g_window, &size_w_borders);
+
+        bw = x - size_w_borders.left;
+        bh = y - size_w_borders.top;
+        g_border_size_set = true;
+    }
+
+    g_cfg.r_x = x - bw;
+    g_cfg.r_y = y - bh;
+}
+
+static void __attribute__((naked))
+hooked_on_window_move(void)
+{
+    __asm__(
+        "mov ebx, %0;"
+        "push dword ptr [esp + 0xe4];"
+        "call ebx;"
+        "jmp 0x42bb94;"
+        : :"r"(hooked_on_windows_move));
+}
+
+PATCH_MEM(0x42bd40, 4, ".4byte 0x%x", hooked_on_window_move);
 
 static void __stdcall
 setup_fullscreen_combo(void *unk1, void *unk2, unsigned *is_fullscreen)
