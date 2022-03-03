@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <assert.h>
+#include <pthread.h>
 
 #include "csh.h"
 #include "csh_config.h"
@@ -131,6 +132,24 @@ struct csh_cmd {
 static struct pw_avl *g_var_avl;
 static struct csh_cmd *g_cmds;
 static char g_profile[64];
+static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool g_static_init_done;
+
+static inline void
+lock(void)
+{
+	if (g_static_init_done) {
+		pthread_mutex_lock(&g_mutex);
+	}
+}
+
+static inline void
+unlock(void)
+{
+	if (g_static_init_done) {
+		pthread_mutex_unlock(&g_mutex);
+	}
+}
 
 static const char *
 cmd_profile_fn(const char *val, void *ctx)
@@ -229,8 +248,10 @@ csh_set(const char *key, const char *val)
 {
 	struct csh_var *var;
 
+	lock();
 	var = get_var(key);
 	if (!var) {
+		unlock();
 		return -ENOENT;
 	}
 
@@ -240,6 +261,7 @@ csh_set(const char *key, const char *val)
 		var->cb_fn();
 	}
 
+	unlock();
 	return 0;
 }
 
@@ -272,12 +294,15 @@ csh_set_b_toggle(const char *key)
 {
 	struct csh_var *var;
 
+	lock();
 	var = get_var(key);
 	if (!var) {
+		unlock();
 		return -ENOENT;
 	}
 
 	set_var_val(var, *var->b ? "0" : "1");
+	unlock();
 }
 
 const char *
@@ -285,60 +310,80 @@ csh_get(const char *key)
 {
 	static char tmpbuf[64];
 	struct csh_var *var;
+	const char *ret;
 
+	lock();
 	var = get_var(key);
 	if (!var) {
+		unlock();
 		return NULL;
 	}
 
 	switch (var->type) {
 		case CSH_T_STRING:
-			return var->s.buf;
+			ret = var->s.buf;
+			break;
 		case CSH_T_DYN_STRING:
-			return *var->dyn_s ? *var->dyn_s : "";
+			/* a copy is needed to avoid data races - use after free */
+			snprintf(tmpbuf, sizeof(tmpbuf), "%s", *var->dyn_s ? *var->dyn_s : "");
+			ret = tmpbuf;
+			break;
 		case CSH_T_INT:
 			snprintf(tmpbuf, sizeof(tmpbuf), "%d", *var->i);
-			return tmpbuf;
+			ret = tmpbuf;
+			break;
 		case CSH_T_DOUBLE:
 			snprintf(tmpbuf, sizeof(tmpbuf), "%.6f", *var->d);
-			return tmpbuf;
+			ret = tmpbuf;
+			break;
 		case CSH_T_BOOL:
-			return *var->b ? "1" : "0";
+			ret = *var->b ? "1" : "0";
+			break;
 		default:
+			assert(false);
 			break;
 	}
 
-	assert(false);
-	return NULL;
+	unlock();
+	return ret;
 }
 
 int
 csh_get_i(const char *key)
 {
 	struct csh_var *var;
+	int ret;
 
+	lock();
 	var = get_var(key);
 	if (!var) {
+		unlock();
 		return 0;
 	}
 
 	switch (var->type) {
 		case CSH_T_STRING:
-			return var->s.buf ? strtoll(var->s.buf, NULL, 0) : 0;
+			ret = var->s.buf ? strtoll(var->s.buf, NULL, 0) : 0;
+			break;
 		case CSH_T_DYN_STRING:
-			return *var->dyn_s ? strtoll(*var->dyn_s, NULL, 0) : 0;
+			ret = *var->dyn_s ? strtoll(*var->dyn_s, NULL, 0) : 0;
+			break;
 		case CSH_T_INT:
-			return *var->i;
+			ret = *var->i;
+			break;
 		case CSH_T_BOOL:
-			return *var->b;
+			ret = *var->b;
+			break;
 		case CSH_T_DOUBLE:
-			return *var->d;
+			ret = *var->d;
+			break;
 		case CSH_T_NONE:
+			assert(false);
 			break;
 	}
 
-	assert(false);
-	return 0;
+	unlock();
+	return ret;
 }
 
 bool
@@ -351,29 +396,38 @@ double
 csh_get_f(const char *key)
 {
 	struct csh_var *var;
+	double ret;
 
+	lock();
 	var = get_var(key);
 	if (!var) {
+		unlock();
 		return 0;
 	}
 
 	switch (var->type) {
 		case CSH_T_STRING:
-			return var->s.buf ? strtod(var->s.buf, NULL) : 0;
+			ret = var->s.buf ? strtod(var->s.buf, NULL) : 0;
+			break;
 		case CSH_T_DYN_STRING:
-			return *var->dyn_s ? strtod(*var->dyn_s, NULL) : 0;
+			ret = *var->dyn_s ? strtod(*var->dyn_s, NULL) : 0;
+			break;
 		case CSH_T_INT:
-			return *var->i;
+			ret = *var->i;
+			break;
 		case CSH_T_BOOL:
-			return *var->b;
+			ret = *var->b;
+			break;
 		case CSH_T_DOUBLE:
-			return *var->d;
+			ret = *var->d;
+			break;
 		case CSH_T_NONE:
+			assert(false);
 			break;
 	}
 
-	assert(false);
-	return 0;
+	unlock();
+	return ret;
 }
 
 void *
@@ -451,11 +505,13 @@ save_var_foreach_cb(void *el, void *ctx1, void *ctx2)
 int
 csh_save(const char *file)
 {
+	lock();
 	snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "%s", file);
 
 	pw_avl_foreach(g_var_avl, save_var_foreach_cb, NULL, NULL);
 
 	csh_cfg_save_s(NULL, NULL, true);
+	unlock();
 }
 
 /** strip preceeding and following quotes and whitespaces */
@@ -495,12 +551,13 @@ cleanup_str(char *str, const char *chars_to_remove)
 const char *
 csh_cmd(const char *usercmd)
 {
-	struct csh_cmd *cmd;
+	struct csh_cmd *cmd, tmp;
 	char *c;
 	uint32_t hash;
 	char buf[128];
 	int prefixlen;
 
+	lock();
 	snprintf(buf, sizeof(buf), "%s", usercmd);
 	c = buf;
 	while (*c) {
@@ -517,12 +574,15 @@ csh_cmd(const char *usercmd)
 	cmd = g_cmds;
 	while (cmd) {
 		if (cmd->prefix_hash == hash && strcmp(cmd->prefix, buf) == 0) {
+			tmp = *cmd;
+			unlock();
 			snprintf(buf, sizeof(buf), "%s", usercmd + prefixlen);
-			return cmd->fn(cleanup_str(buf, " \t\r\n"), cmd->ctx);
+			return tmp.fn(cleanup_str(buf, " \t\r\n"), tmp.ctx);
 		}
 		cmd = cmd->next;
 	}
 
+	unlock();
 	return "^ff0000Unknown command.";
 }
 
@@ -547,9 +607,11 @@ csh_register_cmd(const char *prefix, csh_cmd_handler_fn fn, void *ctx)
 	uint32_t hash = djb2(prefix);
 	int rc;
 
+	lock();
 	cmd = g_cmds;
 	while (cmd) {
 		if (cmd->prefix_hash == hash && strcmp(cmd->prefix, prefix) == 0) {
+			unlock();
 			return -EALREADY;
 		}
 		cmd = cmd->next;
@@ -568,6 +630,7 @@ csh_register_cmd(const char *prefix, csh_cmd_handler_fn fn, void *ctx)
 	cmd->next = g_cmds;
 	g_cmds = cmd;
 
+	unlock();
 	return 0;
 }
 
@@ -577,6 +640,7 @@ csh_register_var(const char *key, struct csh_var tmpvar)
 	struct csh_var *var;
 	uint32_t hash = djb2(key);
 
+	lock();
 	var = get_var(key);
 	assert(var == NULL);
 
@@ -613,6 +677,7 @@ csh_register_var(const char *key, struct csh_var tmpvar)
 	}
 
 	pw_avl_insert(g_var_avl, hash, var);
+	unlock();
 }
 
 void
@@ -657,6 +722,7 @@ csh_register_var_callback(const char *key, csh_set_cb_fn fn)
 	struct csh_var *var;
 	uint32_t hash = djb2(key);
 
+	lock();
 	var = pw_avl_get(g_var_avl, hash);
 	while (var && strcmp(var->key, key) != 0) {
 		var = pw_avl_get_next(g_var_avl, var);
@@ -666,6 +732,7 @@ csh_register_var_callback(const char *key, csh_set_cb_fn fn)
 	assert(!var->cb_fn);
 
 	var->cb_fn = fn;
+	unlock();
 }
 
 static void __attribute__((constructor (104)))
@@ -677,5 +744,12 @@ static_init(void)
 	csh_register_cmd("profile", cmd_profile_fn, NULL);
 	csh_register_cmd("set", cmd_set_var_fn, NULL);
 	csh_register_cmd("show", cmd_show_var_fn, NULL);
+
+}
+
+static void __attribute__((constructor (199)))
+static_init2(void)
+{
+	g_static_init_done = true;
 
 }

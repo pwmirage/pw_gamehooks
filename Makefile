@@ -13,7 +13,7 @@ clean:
 	rm -f $(OBJECTS:%.o=build/%.o) $(OBJECTS:%.o=build/%.d) $(LIB_OBJECTS:%.o=build/%.o) $(LIB_OBJECTS:%.o=build/%.d) build/libgamehook.dll build/gamehook.dll
 
 build/gamehook.dll: $(OBJECTS:%.o=build/%.o) build/libgamehook.dll
-	gcc $(CFLAGS) -o $@ -shared -fPIC $(filter %.o,$^) -Wl,--subsystem,windows -Wl,-Bstatic -lgdi32 -ld3d9 -ld3d8 -Wl,-Bdynamic -lkeystone build/libgamehook.dll -static-libgcc
+	gcc $(CFLAGS) -o $@ -shared -fPIC $(filter %.o,$^) -Wl,--subsystem,windows -Wl,-Bstatic -lgdi32 -ld3d9 -ld3d8 -Wl,-Bdynamic -lkeystone build/libgamehook.dll -static-libgcc -pthread
 
 build/libgamehook.dll: $(LIB_OBJECTS:%.o=build/%.o)
 	gcc $(CFLAGS) -o $@ -shared -fPIC -Wl,--subsystem,windows  -Wl,-Bstatic  -Wl,--whole-archive -lcimgui -Wl,--no-whole-archive $(filter-out %/extlib.o,$^) -limm32 -limagehlp -lbfd -liberty -lz build/extlib.o -Wl,-Bdynamic -lgdi32 -static-libgcc
