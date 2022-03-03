@@ -1106,3 +1106,15 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 
 	return FALSE;
 }
+
+static void __attribute__((constructor (101)))
+static_preinit(void)
+{
+	csh_static_preinit();
+}
+
+static void __attribute__((constructor (199)))
+static_postinit(void)
+{
+	csh_static_postinit();
+}

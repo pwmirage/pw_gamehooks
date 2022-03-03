@@ -119,6 +119,7 @@ struct csh_var {
 		bool b;
 		double d;
 	} def_val;
+	bool initialized;
 };
 
 struct csh_cmd {
@@ -171,6 +172,10 @@ get_var(const char *key)
 	var = pw_avl_get(g_var_avl, hash);
 	while (var && strcmp(var->key, key) != 0) {
 		var = pw_avl_get_next(g_var_avl, var);
+	}
+
+	if (var && !var->initialized) {
+		return NULL;
 	}
 
 	return var;
@@ -302,7 +307,13 @@ csh_set_b_toggle(const char *key)
 	}
 
 	set_var_val(var, *var->b ? "0" : "1");
+	if (var->cb_fn) {
+		var->cb_fn();
+	}
+
 	unlock();
+
+	return 0;
 }
 
 const char *
@@ -641,8 +652,17 @@ csh_register_var(const char *key, struct csh_var tmpvar)
 	uint32_t hash = djb2(key);
 
 	lock();
-	var = get_var(key);
-	assert(var == NULL);
+	var = pw_avl_get(g_var_avl, hash);
+	while (var && strcmp(var->key, key) != 0) {
+		var = pw_avl_get_next(g_var_avl, var);
+	}
+
+	assert(var == NULL || !var->initialized);
+	if (var != NULL) {
+		var->initialized = true;
+		unlock();
+		return;
+	}
 
 	var = pw_avl_alloc(g_var_avl);
 	assert(var);
@@ -676,6 +696,7 @@ csh_register_var(const char *key, struct csh_var tmpvar)
 			break;
 	}
 
+	var->initialized = true;
 	pw_avl_insert(g_var_avl, hash, var);
 	unlock();
 }
@@ -735,21 +756,45 @@ csh_register_var_callback(const char *key, csh_set_cb_fn fn)
 	unlock();
 }
 
-static void __attribute__((constructor (104)))
-static_init(void)
+static void
+static_preinit_foreach_var_cb(void *el, void *ctx1, void *ctx2)
 {
-	g_var_avl = pw_avl_init(sizeof(struct csh_var));
-	assert(g_var_avl != NULL);
+	struct pw_avl_node *node = el;
+	struct csh_var *var = (void *)node->data;
+
+	var->initialized = false;
+	var->cb_fn = NULL;
+}
+
+void
+csh_static_preinit(void)
+{
+	struct csh_cmd *cmd, *tmp;
+
+	g_static_init_done = false;
+
+	cmd = g_cmds;
+	while (cmd) {
+		tmp = cmd->next;
+		free(cmd);
+		cmd = tmp;
+	}
+	g_cmds = NULL;
+
+	if (g_var_avl) {
+		pw_avl_foreach(g_var_avl, static_preinit_foreach_var_cb, NULL, NULL);
+	} else {
+		g_var_avl = pw_avl_init(sizeof(struct csh_var));
+		assert(g_var_avl != NULL);
+	}
 
 	csh_register_cmd("profile", cmd_profile_fn, NULL);
 	csh_register_cmd("set", cmd_set_var_fn, NULL);
 	csh_register_cmd("show", cmd_show_var_fn, NULL);
-
 }
 
-static void __attribute__((constructor (199)))
-static_init2(void)
+void
+csh_static_postinit(void)
 {
 	g_static_init_done = true;
-
 }

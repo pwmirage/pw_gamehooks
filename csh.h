@@ -16,6 +16,12 @@ extern "C" {
 #define	EALREADY	114
 #endif
 
+#ifdef DLLEXPORT
+#define APICALL __declspec(dllexport)
+#else
+#define APICALL __declspec(dllimport)
+#endif
+
 /**
  * Mini runtime shell compatible with csh_config. Manages all memory internally.
  * Any passed buffers are copied.
@@ -37,16 +43,14 @@ extern "C" {
 typedef const char *(*csh_cmd_handler_fn)(const char *val, void *ctx);
 typedef void (*csh_set_cb_fn)(void);
 
-/**
- * Load csh_config from given file, execute commands inside.
- */
-int csh_init(const char *file);
+/** Load csh_config from given file, execute commands inside. */
+APICALL int csh_init(const char *file);
 
 /**
  * Dump all variables into a file. If it doesn't exist it's created.
  * If it exists it's updated without changing its syntax, comments, etc.
  */
-int csh_save(const char *file);
+APICALL int csh_save(const char *file);
 
 /**
  * Execute given command inside the shell.
@@ -54,10 +58,10 @@ int csh_save(const char *file);
  * \return response message. May be prefixed by color, e.g.
  * ^ff0000Invalid command.
  */
-const char *csh_cmd(const char *cmd);
+APICALL const char *csh_cmd(const char *cmd);
 
 /** Printf-like variant of csh_cmd(); */
-const char *csh_cmdf(const char *cmd, ...);
+APICALL const char *csh_cmdf(const char *cmd, ...);
 
 /**
  * Set internal variable (that was registered earlier with csh_register_var_*()).
@@ -66,26 +70,26 @@ const char *csh_cmdf(const char *cmd, ...);
  * \return 0 on success, negative errno otherwise, e.g. -ENOENT if variable wasn't
  * registered
  */
-int csh_set(const char *key, const char *val);
+APICALL int csh_set(const char *key, const char *val);
 /** Variant of csh_set() */
-int csh_set_i(const char *key, int val);
+APICALL int csh_set_i(const char *key, int val);
 /** Variant of csh_set() */
-int csh_set_f(const char *key, double val);
+APICALL int csh_set_f(const char *key, double val);
 /** Variant of csh_set() */
-int csh_set_b(const char *key, bool val);
+APICALL int csh_set_b(const char *key, bool val);
 /** Variant of csh_set() */
-int csh_set_b_toggle(const char *key);
+APICALL int csh_set_b_toggle(const char *key);
 
 /** Get variable's value. NULL if unset or variable doesn't exist. */
-const char *csh_get(const char *key);
+APICALL const char *csh_get(const char *key);
 /** Variant of csh_show() */
-int csh_get_i(const char *key);
+APICALL int csh_get_i(const char *key);
 /** Variant of csh_show() */
-double csh_get_f(const char *key);
+APICALL double csh_get_f(const char *key);
 /** Variant of csh_show() */
-bool csh_get_b(const char *key);
+APICALL bool csh_get_b(const char *key);
 /** Get pointer to the backing variable */
-void *csh_get_ptr(const char *key);
+APICALL void *csh_get_ptr(const char *key);
 
 /**
  * Register custom handler for commands starting with `prefix`.
@@ -93,35 +97,41 @@ void *csh_get_ptr(const char *key);
  * \return 0 on success, negative errno otherwise, e.g. -EALREADY if `prefix`
  * is already registered.
  */
-int csh_register_cmd(const char *prefix, csh_cmd_handler_fn fn, void *ctx);
+APICALL int csh_register_cmd(const char *prefix, csh_cmd_handler_fn fn, void *ctx);
 
 /**
  * Register new variable. All data set by the user will be copied into the
  * provided buffer at `buf`, max `buflen` characters (including null terminator).
  * Defval is immediately copied into the buffer.
  */
-void csh_register_var_s(const char *name, char *buf, int buflen, const char *defval);
+APICALL void csh_register_var_s(const char *name, char *buf, int buflen, const char *defval);
 
 /**
  * Register new variable. All data set by the user will be put into a newly allocated
  * buffer, that will be set in *var. Defval will be strduped, unless it's NULL.
  */
-void csh_register_var_dyn_s(const char *name, char **var, const char *defval);
+APICALL void csh_register_var_dyn_s(const char *name, char **var, const char *defval);
 
 /**
  * Register new variable. All data set by the user will be converted into an integer
  * and put into *var.
  */
-void csh_register_var_i(const char *name, int *var, int defval);
+APICALL void csh_register_var_i(const char *name, int *var, int defval);
 /** \see csh_register_var_i() */
-void csh_register_var_f(const char *name, double *var, double defval);
+APICALL void csh_register_var_f(const char *name, double *var, double defval);
 /** \see csh_register_var_i() */
-void csh_register_var_b(const char *name, bool *var, bool defval);
+APICALL void csh_register_var_b(const char *name, bool *var, bool defval);
 
 /**
  * Register a function to be called after the given variable is ever modified.
  */
-void csh_register_var_callback(const char *name, csh_set_cb_fn fn);
+APICALL void csh_register_var_callback(const char *name, csh_set_cb_fn fn);
+
+/** To be called before any CSH_REGISTER_*() */
+APICALL void csh_static_preinit(void);
+
+/** To be called after csh_static_preinit() and all CSH_REGISTER_*() */
+APICALL void csh_static_postinit(void);
 
 /* utility macros */
 #define _CSH_JOIN2(a, b) a ## _ ## b
