@@ -39,9 +39,14 @@ typedef void (*csh_set_cb_fn)(void);
 
 /**
  * Load csh_config from given file, execute commands inside.
- * Save the filename internally for saving.
  */
 int csh_init(const char *file);
+
+/**
+ * Dump all variables into a file. If it doesn't exist it's created.
+ * If it exists it's updated without changing its syntax, comments, etc.
+ */
+int csh_save(const char *file);
 
 /**
  * Execute given command inside the shell.
