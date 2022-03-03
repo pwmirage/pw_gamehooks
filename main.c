@@ -210,6 +210,8 @@ void window_handle_tab_keypress(void);
 static LRESULT CALLBACK
 event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
+	static bool alt_f4_pressed;
+
 	switch(event) {
 	case WM_SIZE:
 		if (data == SIZE_MINIMIZED) {
@@ -243,6 +245,9 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 			case VK_RWIN:
 				window_handle_win_keypress();
 				break;
+			case VK_F4:
+				alt_f4_pressed = true;
+				break;
 			default:
 				break;
 		}
@@ -253,6 +258,8 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 	case WM_SYSKEYUP:
 		if (data == VK_RETURN) {
 			csh_set_b_toggle("r_borderless");
+		} else if (data == VK_F4) {
+			alt_f4_pressed = false;
 		}
 		if (d3d_handle_keyboard(event, data, lparam)) {
 			return TRUE;
@@ -296,6 +303,11 @@ event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 		/* do not beep! */
 		return MNC_CLOSE << 16;
+	case WM_CLOSE:
+		if (!alt_f4_pressed) {
+			PostQuitMessage(0);
+		}
+		return 0;
 	case MG_CB_MSG: {
 		struct thread_msg_ctx ctx, *org_ctx = (void *)lparam;
 
