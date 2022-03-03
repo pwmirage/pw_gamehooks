@@ -36,8 +36,8 @@ static struct {
 	bool r_borderless;
 } g_cfg;
 
-CSH_REGISTER_VAR_I("r_x", &g_cfg.r_x);
-CSH_REGISTER_VAR_I("r_y", &g_cfg.r_y);
+CSH_REGISTER_VAR_I("r_x", &g_cfg.r_x, -1);
+CSH_REGISTER_VAR_I("r_y", &g_cfg.r_y, -1);
 CSH_REGISTER_VAR_I("r_width", &g_cfg.r_width, 1024);
 CSH_REGISTER_VAR_I("r_height", &g_cfg.r_height, 768);
 CSH_REGISTER_VAR_B("r_fullscreen", &g_cfg.r_fullscreen);
@@ -88,12 +88,13 @@ CSH_REGISTER_VAR_CALLBACK("r_fullscreen")(void)
 }
 
 static void
-set_borderless_cb(void *arg1, void *arg2)
+set_borderless_cb(void *_posupdate, void *arg2)
 {
-    static RECT size_w_borders;
-    int w, h, x, y, fw, fh;
+	static RECT size_w_borders;
+	int w, h, x, y, fw, fh;
+	bool posupdate = (bool)(intptr_t)_posupdate;
 
-    unsigned style = g_cfg.r_borderless ? 0x80000000 : 0x80ce0000;
+	unsigned style = g_cfg.r_borderless ? 0x80000000 : 0x80ce0000;
     patch_mem_u32(0x40beb5, style);
     patch_mem_u32(0x40beac, style);
 
@@ -124,14 +125,16 @@ set_borderless_cb(void *arg1, void *arg2)
         h = fh - y;
     }
 
-    SetWindowLong(g_window, GWL_STYLE, style);
-    SetWindowPos(g_window, NULL, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+	SetWindowLong(g_window, GWL_STYLE, style);
+	if (posupdate) {
+		SetWindowPos(g_window, NULL, x, y, w, h, SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+	}
 }
 
 CSH_REGISTER_VAR_CALLBACK("r_borderless")(void)
 {
     if (g_window) {
-        pw_ui_thread_postmsg(set_borderless_cb, NULL, NULL);
+        pw_ui_thread_postmsg(set_borderless_cb, (void *)(intptr_t)true, NULL);
     }
 }
 
@@ -213,11 +216,20 @@ static bool g_border_size_set;
 static void __cdecl
 hooked_on_window_resize(int w, int h)
 {
-    g_cfg.r_width = w;
-    g_cfg.r_height = h;
+	static int *shadow_w, *shadow_h;
 
-    /* reset it, either because of borderless change on fullscreen switch */
-    g_border_size_set = false;
+	if (!shadow_w) {
+		shadow_w = mem_region_get_i32("_shadow_r_width");
+		shadow_h = mem_region_get_i32("_shadow_r_height");
+	}
+
+	g_cfg.r_width = w;
+	g_cfg.r_height = h;
+	*shadow_w = g_cfg.r_width;
+	*shadow_h = g_cfg.r_height;
+
+	/* reset it, either because of borderless change on fullscreen switch */
+	g_border_size_set = false;
 }
 
 TRAMPOLINE(0x42b918, 6,
@@ -393,6 +405,15 @@ is_mouse_over_window(int safe_margin)
 	return false;
 }
 
+static void
+alt_enter_cb(void *arg1, void *arg2)
+{
+	g_cfg.r_fullscreen = !g_cfg.r_fullscreen;
+	g_cfg.r_borderless = g_cfg.r_fullscreen;
+	set_borderless_cb((void *)(intptr_t) false, NULL);
+	set_fullscreen_cb(NULL, NULL);
+}
+
 static LRESULT CALLBACK
 hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
@@ -448,7 +469,9 @@ hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		break;
 	case WM_SYSKEYUP:
 		if (data == VK_RETURN) {
-			csh_set_b_toggle("r_borderless");
+			if (g_window) {
+				pw_ui_thread_postmsg(alt_enter_cb, NULL, NULL);
+			}
 		} else if (data == VK_F4) {
 			alt_f4_pressed = false;
 		}
@@ -586,8 +609,11 @@ window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC,
             (LONG)hooked_event_handler);
 	*mem_region_get_u32("win_event_handler") = g_orig_event_handler;
+
 	*mem_region_get_i32("_shadow_r_x") = x;
 	*mem_region_get_i32("_shadow_r_y") = y;
+	*mem_region_get_i32("_shadow_r_width") = w;
+	*mem_region_get_i32("_shadow_r_height") = h;
 
 	/* used by PW */
 	*(HINSTANCE *)0x927f5c = hinstance;
