@@ -143,14 +143,24 @@ window_size_pos_changed_cb(void *_idchanged, void *arg2)
 {
     RECT size_w_borders;
     int w, h, x, y, fw, fh;
+    int bw, bh;
     int idchanged = (int)(intptr_t)_idchanged;
 
     GetWindowRect(g_window, &size_w_borders);
 
-    w = size_w_borders.right - size_w_borders.left;
-    h = size_w_borders.bottom - size_w_borders.top;
     x = size_w_borders.left;
     y = size_w_borders.top;
+    w = size_w_borders.right - size_w_borders.left;
+    h = size_w_borders.bottom - size_w_borders.top;
+
+    bw = size_w_borders.right - size_w_borders.left;
+    bh = size_w_borders.bottom - size_w_borders.top;
+
+    AdjustWindowRectEx(&size_w_borders, GetWindowLong(g_window, GWL_STYLE), false,
+            GetWindowLong(g_window, GWL_EXSTYLE));
+
+    bw = size_w_borders.right - size_w_borders.left - bw;
+    bh = size_w_borders.bottom - size_w_borders.top - bh;
 
     switch (idchanged) {
     case DIM_CHANGE_X:
@@ -160,10 +170,10 @@ window_size_pos_changed_cb(void *_idchanged, void *arg2)
         y = csh_get_i("r_y");
         break;
     case DIM_CHANGE_WIDTH:
-        w = csh_get_i("r_width");
+        w = csh_get_i("r_width") + bw;
         break;
     case DIM_CHANGE_HEIGHT:
-        h = csh_get_i("r_height");
+        h = csh_get_i("r_height") + bh;
         break;
     default:
         break;
@@ -223,7 +233,7 @@ hooked_on_windows_move(uint32_t lparam)
     int16_t x = lparam & 0xffff;
     int16_t y = lparam >> 16;
 
-    if (!g_border_size_set) {
+    if (g_window && !g_border_size_set) {
         RECT size_w_borders;
         GetWindowRect(g_window, &size_w_borders);
 
