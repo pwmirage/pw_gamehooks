@@ -133,6 +133,12 @@ mem_region_get_u32(const char *name)
     return &mem->data;
 }
 
+int *
+mem_region_get_i32(const char *name)
+{
+    return (int *)mem_region_get_u32(name);
+}
+
 void
 mem_region_free(struct mem_region *mem)
 {
