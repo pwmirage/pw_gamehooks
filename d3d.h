@@ -36,6 +36,13 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
 #ifdef __cplusplus
 }
 
+#define ImGuiW_LabelLeft(label) \
+({ \
+    ImGui::AlignTextToFramePadding(); \
+    ImGui::Text(label); \
+    ImGui::SameLine(); \
+})
+
 /** c++ doesn't accept char* as template arguments, so use a macro */
 #define ImGuiW_CheckboxVar(varname, label) \
 ({ \
@@ -48,6 +55,26 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
     ret = ImGui::Checkbox(label, ptr); \
     if (ret) { \
         csh_set(varname, *ptr ? "1" : "0"); \
+    } \
+    ret; \
+})
+
+#define ImGuiW_InputIntVar(varname, label) \
+({ \
+    static int *ptr = NULL; \
+    bool ret; \
+    int px; \
+    if (ptr == NULL) { \
+        ptr = (int *)csh_get_ptr(varname); \
+        assert(ptr != NULL); \
+    } \
+    px = ImGui::GetCursorPosX(); \
+    ImGuiW_LabelLeft(label); \
+    ImGui::SetCursorPosX(px + 69); \
+	ImGui::SetNextItemWidth(150); \
+    ret = ImGui::InputInt("###" label, ptr); \
+    if (ret) { \
+        csh_set_i(varname, *ptr); \
     } \
     ret; \
 })

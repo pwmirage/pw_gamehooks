@@ -131,10 +131,20 @@ d3d_try_show_settings_win(void)
 			}
 			ImGui::PopStyleVar(2);
 
+			static bool save_pos_to_cfg;
+			ImGuiW_InputIntVar("r_x", "Pos. x:");
+			ImGui::SameLine();
+			ImGuiW_InputIntVar("r_y", "Pos. y:");
+			ImGui::Checkbox("Save window position to cfg", &save_pos_to_cfg);
+
+			ImGuiW_InputIntVar("r_width", "Width:");
+			ImGui::SameLine();
+			ImGuiW_InputIntVar("r_height", "Height:");
+
+			ImGuiW_CheckboxVar("r_borderless", "Borderless window");
 			ImGuiW_CheckboxVar("r_render_nofocus", "Freeze window on focus lost");
 			ImGuiW_CheckboxVar("r_head_hp_bar", "Show HP bars above entities");
 			ImGuiW_CheckboxVar("r_head_mp_bar", "Show MP bars above entities");
-			ImGuiW_CheckboxVar("r_borderless", "Borderless window");
 
 			ImGui::SameLine();
 			d3d_show_help_marker("This is set automatically when \"Borderless fullscreen\" is set,\nbut may be useful in other cases too, e.g. to run two\nsemi-fullscreen clients side by side.");
@@ -183,19 +193,19 @@ d3d_try_show_settings_win(void)
 
 	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3);
 
-	if (ImGui::Button("Apply", {80, 22})) {
+	if (ImGui::Button("Save", {80, 22})) {
 		g_settings_show = false;
 	}
 
 	ImGui::SameLine();
 
-	if (ImGui::Button("Confirm", {80, 22})) {
+	if (ImGui::Button("Discard", {80, 22})) {
 		g_settings_show = false;
 	}
 
 	ImGui::SameLine();
 
-	if (ImGui::Button("Cancel", {80, 22})) {
+	if (ImGui::Button("Close", {80, 22})) {
 		g_settings_show = false;
 	}
 

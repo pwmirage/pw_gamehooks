@@ -48,7 +48,7 @@ d3d_imgui_init(void)
 	colors[ImGuiCol_Text] = (ImVec4){ 0.80f, 0.80f, 0.83f, 1.00f };
 	colors[ImGuiCol_TextDisabled] = (ImVec4){ 0.24f, 0.23f, 0.29f, 1.00f };
 	colors[ImGuiCol_WindowBg] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
-	colors[ImGuiCol_ChildBg] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
+	colors[ImGuiCol_ChildBg] = (ImVec4){ 0.06f, 0.05f, 0.07f, 1.00f };
 	colors[ImGuiCol_PopupBg] = (ImVec4){ 0.07f, 0.07f, 0.09f, 1.00f };
 	colors[ImGuiCol_Border] = (ImVec4){ 0.80f, 0.80f, 0.83f, 0.48f };
 	colors[ImGuiCol_BorderShadow] = (ImVec4){ 0.92f, 0.91f, 0.88f, 0.00f };
@@ -80,7 +80,7 @@ d3d_imgui_init(void)
 	colors[ImGuiCol_ScrollbarGrab] = (ImVec4){ 0.58f, 0.57f, 0.57f, 0.31f };
 	colors[ImGuiCol_ScrollbarGrabHovered] = (ImVec4){ 0.43f, 0.43f, 0.45f, 1.00f };
 	colors[ImGuiCol_ScrollbarGrabActive] = (ImVec4){ 0.52f, 0.52f, 0.52f, 1.00f };
-	colors[ImGuiCol_CheckMark] = (ImVec4){ 0.38f, 1.00f, 0.00f, 0.31f };
+	colors[ImGuiCol_CheckMark] = (ImVec4){ 0.38f, 1.00f, 0.00f, 0.51f };
 	colors[ImGuiCol_Tab] = (ImVec4){ 0.18f, 0.17f, 0.19f, 1.00f };
 	colors[ImGuiCol_TabHovered] = (ImVec4){ 0.24f, 0.24f, 0.24f, 1.00f };
 	colors[ImGuiCol_TabActive] = (ImVec4){ 0.30f, 0.30f, 0.30f, 1.00f };
