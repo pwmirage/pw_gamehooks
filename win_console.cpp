@@ -51,12 +51,6 @@ struct log_entry {
 
 struct ring_buffer_sp_sc *g_render_thr_queue;
 
-struct thread_msg_ctx {
-	mg_callback cb;
-	void *arg1;
-	void *arg2;
-};
-
 static void
 console_init(void)
 {

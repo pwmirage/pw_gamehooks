@@ -273,6 +273,15 @@ PW_CALL void (*pw_free)(void *addr) PW_ADDR(0x6f5490);
 typedef void (*mg_callback)(void *arg1, void *arg2);
 int pw_game_thr_post_msg(mg_callback fn, void *arg1, void *arg2);
 
+/* TODO move this to some internal header */
+#define MG_CB_MSG (WM_USER + 165)
+
+struct thread_msg_ctx {
+	mg_callback cb;
+	void *arg1;
+	void *arg2;
+};
+
 void pw_ui_thread_sendmsg(mg_callback cb, void *arg1, void *arg2);
 void pw_ui_thread_postmsg(mg_callback cb, void *arg1, void *arg2);
 

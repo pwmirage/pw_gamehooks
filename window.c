@@ -23,6 +23,10 @@
 #include "extlib.h"
 #include "idmap.h"
 
+#ifndef WM_MOUSEHWHEEL
+#define WM_MOUSEHWHEEL 0x020E
+#endif
+
 static struct {
 	int r_x;
 	int r_y;
@@ -44,6 +48,7 @@ struct rect {
 };
 
 static struct rect g_window_size;
+WNDPROC g_orig_event_handler;
 
 static void
 set_fullscreen_cb(void *arg1, void *arg2)
@@ -380,23 +385,216 @@ is_mouse_over_window(int safe_margin)
 	return false;
 }
 
-void
-window_handle_win_keypress(void)
+static LRESULT CALLBACK
+hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
-    if (g_cfg.r_borderless && g_cfg.r_fullscreen
-            && GetActiveWindow() == g_window
-            && is_mouse_over_window(5)) {
-		ShowWindow(g_window, SW_MINIMIZE);
-		g_pw_data->is_render_active = false;
+	static bool alt_f4_pressed;
+
+	switch(event) {
+	case WM_SIZE:
+		if (data == SIZE_MINIMIZED) {
+			/* PW doesnt react to this message and keeps using CPU, so make it stop */
+			g_pw_data->is_render_active = false;
+			break;
+		} else if (data == SIZE_RESTORED) {
+			g_pw_data->is_render_active = true;
+			break;
+		}
+		break;
+	case WM_LBUTTONDOWN: case WM_LBUTTONDBLCLK:
+	case WM_RBUTTONDOWN: case WM_RBUTTONDBLCLK:
+	case WM_MBUTTONDOWN: case WM_MBUTTONDBLCLK:
+	case WM_XBUTTONDOWN: case WM_XBUTTONDBLCLK:
+	case WM_LBUTTONUP:
+	case WM_RBUTTONUP:
+	case WM_MBUTTONUP:
+	case WM_XBUTTONUP:
+	case WM_MOUSEWHEEL:
+	case WM_MOUSEHWHEEL:
+	case WM_MOUSEACTIVATE:
+		if (d3d_handle_mouse(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
+	case WM_SYSKEYDOWN:
+	case WM_KEYDOWN:
+		switch (data) {
+			case VK_LWIN:
+			case VK_RWIN:
+				if (g_cfg.r_borderless
+                        && g_cfg.r_fullscreen && GetActiveWindow() == g_window
+					    && is_mouse_over_window(5)) {
+					ShowWindow(g_window, SW_MINIMIZE);
+					g_pw_data->is_render_active = false;
+				}
+				break;
+			case VK_F4:
+				alt_f4_pressed = true;
+				break;
+			default:
+				break;
+		}
+		if (d3d_handle_keyboard(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
+	case WM_SYSKEYUP:
+		if (data == VK_RETURN) {
+			csh_set_b_toggle("r_borderless");
+		} else if (data == VK_F4) {
+			alt_f4_pressed = false;
+		}
+		if (d3d_handle_keyboard(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
+	case WM_KEYUP:
+	case WM_CHAR:
+		switch (data) {
+			case '~':
+				d3d_console_toggle();
+				return true;
+			default:
+				break;
+		}
+		if (d3d_handle_keyboard(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
+	case WM_DEVICECHANGE:
+		if (d3d_handle_keyboard(event, data, lparam)) {
+			return TRUE;
+		}
+		break;
+	case WM_KILLFOCUS:
+		if ((GetAsyncKeyState(VK_MENU) & 0x8000)
+                && g_cfg.r_borderless && g_cfg.r_fullscreen
+			    && is_mouse_over_window(5)) {
+			ShowWindow(g_window, SW_MINIMIZE);
+			g_pw_data->is_render_active = false;
+		}
+		break;
+	case WM_SYSCOMMAND:
+		switch (data) {
+		case SC_MINIMIZE:
+			/* PW doesnt react to this message and keeps using CPU, so make it stop */
+			g_pw_data->is_render_active = false;
+			break;
+		case SC_RESTORE:
+			g_pw_data->is_render_active = true;
+			break;
+		default:
+			break;
+		}
+		break;
+	case WM_MENUCHAR:
+		CallWindowProc(g_orig_event_handler, window, event, data, lparam);
+		/* do not beep! */
+		return MNC_CLOSE << 16;
+	case WM_CLOSE:
+		if (!alt_f4_pressed) {
+			PostQuitMessage(0);
+		}
+		return 0;
+	case MG_CB_MSG: {
+		struct thread_msg_ctx ctx, *org_ctx = (void *)lparam;
+
+		ctx = *org_ctx;
+		free(org_ctx);
+		ctx.cb(ctx.arg1, ctx.arg2);
+		break;
 	}
+	default:
+		break;
+	}
+
+	/* let the game handle this key */
+	return CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 }
 
 void
-window_handle_tab_keypress(void)
+window_reinit(void)
 {
-    if ((GetAsyncKeyState(VK_MENU) & 0x8000) && g_cfg.r_borderless
-            && g_cfg.r_fullscreen && is_mouse_over_window(5)) {
-        ShowWindow(g_window, SW_MINIMIZE);
-        g_pw_data->is_render_active = false;
-    }
+    g_orig_event_handler = *mem_region_get_u32("win_event_handler");
+	assert(g_orig_event_handler);
+	SetWindowLong(g_window, GWL_WNDPROC, (LONG)hooked_event_handler);
+}
+
+bool
+window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
+{
+	int rc;
+	int styles;
+
+	int x = csh_get_i("r_x");
+	int y = csh_get_i("r_y");
+	int w = csh_get_i("r_width");
+	int h = csh_get_i("r_height");
+	bool is_fullscreen = csh_get_b("r_fullscreen");
+	bool is_borderless = csh_get_b("r_borderless");
+
+	if (w == -1 && h == -1) {
+		w = *(int *)0x927d82;
+		h = *(int *)0x927d86;
+	} else {
+		*(int *)0x927d82 = w;
+		*(int *)0x927d86 = h;
+	}
+
+	if (is_fullscreen && is_borderless) {
+		styles = 0x80000000;
+	} else {
+		styles = 0x80ce0000;
+	}
+
+
+	if (!is_fullscreen) {
+		RECT rect = { 0, 0, w, h };
+		AdjustWindowRect(&rect, styles, false);
+
+		w = rect.right - rect.left;
+		h = rect.bottom - rect.top;
+		if (x == -1 && y == -1) {
+			x = (GetSystemMetrics(SM_CXFULLSCREEN) - w) / 2;
+			y = (GetSystemMetrics(SM_CYFULLSCREEN) - h) / 2;
+		}
+	} else if (x == -1 && y == -1) {
+		x = 0;
+		y = 0;
+	}
+
+	g_window = CreateWindowEx(0, "ElementClient Window", "PW Mirage", styles,
+			x, y, w, h, NULL, NULL, hinstance, NULL);
+	if (!g_window) {
+		return false;
+	}
+
+	if (is_borderless) {
+		patch_mem_u32(0x40beb5, 0x80000000);
+		patch_mem_u32(0x40beac, 0x80000000);
+	}
+
+	/* hook into PW input handling */
+	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC,
+            (LONG)hooked_event_handler);
+	*mem_region_get_u32("win_event_handler") = g_orig_event_handler;
+
+	/* used by PW */
+	*(HINSTANCE *)0x927f5c = hinstance;
+	*(HWND *)(uintptr_t)0x927f60 = g_window;
+
+	ShowWindow(g_window, SW_SHOW);
+	UpdateWindow(g_window);
+	SetForegroundWindow(g_window);
+
+	/* force the window into foreground */
+	DWORD d = 0;
+	DWORD windowThreadProcessId = GetWindowThreadProcessId(GetForegroundWindow(), &d);
+	DWORD currentThreadId = GetCurrentThreadId();
+	AttachThreadInput(windowThreadProcessId, currentThreadId, true);
+	BringWindowToTop(g_window);
+	ShowWindow(g_window, SW_SHOW);
+	AttachThreadInput(windowThreadProcessId,currentThreadId, false);
+
+	return true;
 }
