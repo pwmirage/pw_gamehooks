@@ -97,6 +97,8 @@ d3d_try_show_settings_win(void)
 	ImGui::PopStyleVar(1);
 	ImGui::PopStyleColor(3);
 
+	static bool save_pos_to_cfg;
+
 	if (ImGui::BeginTabBar("MainTabs", ImGuiTabBarFlags_None)) {
 		if (ImGui::BeginTabItem("Rendering", NULL, ImGuiTabBarFlags_None)) {
 			ImGui::BeginChild("ScrollingRegion", {0, -30}, false,
@@ -131,23 +133,25 @@ d3d_try_show_settings_win(void)
 			}
 			ImGui::PopStyleVar(2);
 
-			static bool save_pos_to_cfg;
-			ImGuiW_InputIntVar("r_x", "Pos. x:");
+			ImGuiW_InputIntShadowFocusVar("r_x", "Pos. x:");
 			ImGui::SameLine();
-			ImGuiW_InputIntVar("r_y", "Pos. y:");
-			ImGui::Checkbox("Save window position to cfg", &save_pos_to_cfg);
+			ImGuiW_InputIntShadowFocusVar("r_y", "Pos. y:");
 
-			ImGuiW_InputIntVar("r_width", "Width:");
+			ImGui::Checkbox("Save window position to cfg", &save_pos_to_cfg);
 			ImGui::SameLine();
-			ImGuiW_InputIntVar("r_height", "Height:");
+			d3d_show_help_marker("Window position doesn't get saved by default for extra convenience.");
+
+			ImGuiW_InputIntShadowFocusVar("r_width", "Width:");
+			ImGui::SameLine();
+			ImGuiW_InputIntShadowFocusVar("r_height", "Height:");
 
 			ImGuiW_CheckboxVar("r_borderless", "Borderless window");
+			ImGui::SameLine();
+			d3d_show_help_marker("This is set automatically when \"Borderless fullscreen\" is set,\nbut may be useful in other cases too, e.g. to run two\nsemi-fullscreen clients side by side.");
+
 			ImGuiW_CheckboxVar("r_render_nofocus", "Freeze window on focus lost");
 			ImGuiW_CheckboxVar("r_head_hp_bar", "Show HP bars above entities");
 			ImGuiW_CheckboxVar("r_head_mp_bar", "Show MP bars above entities");
-
-			ImGui::SameLine();
-			d3d_show_help_marker("This is set automatically when \"Borderless fullscreen\" is set,\nbut may be useful in other cases too, e.g. to run two\nsemi-fullscreen clients side by side.");
 
 			ImGui::EndChild();
 			ImGui::EndTabItem();
@@ -194,12 +198,17 @@ d3d_try_show_settings_win(void)
 	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3);
 
 	if (ImGui::Button("Save", {80, 22})) {
+		if (!save_pos_to_cfg) {
+			csh_set_i("r_x", *mem_region_get_i32("loaded_r_x"));
+			csh_set_i("r_y", *mem_region_get_i32("loaded_r_y"));
+		}
+		csh_save("..\\patcher\\game.cfg");
 		g_settings_show = false;
 	}
 
 	ImGui::SameLine();
 
-	if (ImGui::Button("Discard", {80, 22})) {
+	if (ImGui::Button("Revert", {80, 22})) {
 		g_settings_show = false;
 	}
 

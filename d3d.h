@@ -11,6 +11,8 @@ extern "C" {
 
 #include <stdint.h>
 
+#include "extlib.h"
+
 struct ImFont;
 extern bool g_settings_show;
 extern bool g_update_show;
@@ -59,20 +61,68 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
     ret; \
 })
 
+#define ImGuiW_InputInt(ptr, label) \
+({ \
+    int px = ImGui::GetCursorPosX(); \
+    ImGuiW_LabelLeft(label); \
+    ImGui::SetCursorPosX(px + 69); \
+	ImGui::SetNextItemWidth(150); \
+    ImGui::InputInt("###" label, ptr); \
+})
+
 #define ImGuiW_InputIntVar(varname, label) \
 ({ \
     static int *ptr = NULL; \
-    bool ret; \
-    int px; \
     if (ptr == NULL) { \
         ptr = (int *)csh_get_ptr(varname); \
         assert(ptr != NULL); \
     } \
-    px = ImGui::GetCursorPosX(); \
-    ImGuiW_LabelLeft(label); \
-    ImGui::SetCursorPosX(px + 69); \
-	ImGui::SetNextItemWidth(150); \
-    ret = ImGui::InputInt("###" label, ptr); \
+    ImGuiW_InputInt(ptr, label); \
+    if (ret) { \
+        csh_set_i(varname, *ptr); \
+    } \
+    ptr; \
+})
+
+#define ImGuiW_InputIntShadowVar(varname, label) \
+({ \
+    static int *ptr = NULL; \
+    static bool had_focus = false; \
+    bool has_focus, ret; \
+    if (ptr == NULL) { \
+        ptr = mem_region_get_i32("_shadow_" varname); \
+        assert(ptr != NULL); \
+    } \
+    ImGuiW_InputInt(ptr, label); \
+    has_focus = ImGui::IsItemFocused(); \
+    ret = had_focus && !has_focus; \
+    had_focus = has_focus; \
+    ret; \
+})
+
+#define ImGuiW_ApplyIntShadowVar(varname) \
+({ \
+    static int *ptr = NULL; \
+    if (ptr == NULL) { \
+        ptr = mem_region_get_i32("_shadow_" varname); \
+        assert(ptr != NULL); \
+    } \
+    csh_set_i(varname, *ptr); \
+})
+
+#define ImGuiW_InputIntShadowFocusVar(varname, label) \
+({ \
+    static int *ptr = NULL; \
+    static bool had_focus = false; \
+    bool has_focus, ret; \
+    if (ptr == NULL) { \
+        ptr = mem_region_get_i32("_shadow_" varname); \
+        assert(ptr != NULL); \
+    } \
+    ImGuiW_InputInt(ptr, label); \
+    has_focus = ImGui::IsItemFocused(); \
+    ret = had_focus && !has_focus; \
+    had_focus = has_focus; \
     if (ret) { \
         csh_set_i(varname, *ptr); \
     } \

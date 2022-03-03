@@ -235,8 +235,14 @@ static void __stdcall
 hooked_on_windows_move(uint32_t lparam)
 {
     static int bw, bh;
+    static int *shadow_x, *shadow_y;
     int16_t x = lparam & 0xffff;
     int16_t y = lparam >> 16;
+
+    if (!shadow_x) {
+        shadow_x = mem_region_get_i32("_shadow_r_x");
+		shadow_y = mem_region_get_i32("_shadow_r_y");
+	}
 
     if (g_window && !g_border_size_set) {
         RECT size_w_borders;
@@ -247,8 +253,10 @@ hooked_on_windows_move(uint32_t lparam)
         g_border_size_set = true;
     }
 
-    g_cfg.r_x = x - bw;
-    g_cfg.r_y = y - bh;
+	g_cfg.r_x = x - bw;
+	g_cfg.r_y = y - bh;
+	*shadow_x = g_cfg.r_x;
+	*shadow_y = g_cfg.r_y;
 }
 
 static void __attribute__((naked))
@@ -578,6 +586,8 @@ window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC,
             (LONG)hooked_event_handler);
 	*mem_region_get_u32("win_event_handler") = g_orig_event_handler;
+	*mem_region_get_i32("_shadow_r_x") = x;
+	*mem_region_get_i32("_shadow_r_y") = y;
 
 	/* used by PW */
 	*(HINSTANCE *)0x927f5c = hinstance;
