@@ -27,6 +27,7 @@ struct pw_avl {
 typedef void (*pw_avl_foreach_cb)(void *el, void *ctx1, void *ctx2);
 
 struct pw_avl *pw_avl_init(size_t el_size);
+void pw_avl_deinit(struct pw_avl *avl);
 void *pw_avl_alloc(struct pw_avl *avl);
 void pw_avl_free(struct pw_avl *avl, void *data);
 void pw_avl_insert(struct pw_avl *avl, uint64_t key, void *data);

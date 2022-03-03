@@ -22,6 +22,38 @@ pw_avl_init(size_t el_size)
 	return avl;
 }
 
+static void
+deinit_foreach_cb(struct pw_avl_node *node)
+{
+	if (node->next) {
+		deinit_foreach_cb(node->next);
+	}
+
+	if (node->left) {
+		deinit_foreach_cb(node->left);
+	}
+
+	if (node->right) {
+		deinit_foreach_cb(node->right);
+	}
+
+	free(node);
+}
+
+void
+pw_avl_deinit(struct pw_avl *avl)
+{
+	if (!avl) {
+		return;
+	}
+
+	/* we need to iterate depth-first to avoid use-after-free,
+	 * so pw_avl_foreach() won't work */
+	deinit_foreach_cb(avl->root);
+
+	free(avl);
+}
+
 void *
 pw_avl_alloc(struct pw_avl *avl)
 {
