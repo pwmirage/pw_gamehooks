@@ -157,9 +157,13 @@ struct ui_data {
 };
 
 struct app_data {
-	char unk1[28];
+	char unk1[24];
+	void **config_man;
 	struct game_data *game;
-	char unk2[1016];
+	void *unk2;
+	void *unk3;
+	void *gfx_man;
+	char unk4[1004];
 	bool is_render_active;
 };
 
@@ -255,6 +259,7 @@ PW_CALL void __thiscall (*pw_open_quest_window)(void *dlg_man, const char *win_n
 PW_CALL void __thiscall (*pw_open_faction_window)(void *dlg_man2, const char *win_name) PW_ADDR(0x501910);
 PW_CALL void __thiscall (*pw_open_help_window)(void *dlg_man3, const char *win_name) PW_ADDR(0x501c50);
 PW_CALL void __thiscall (*pw_queue_action_raw)(void *unk, int action_id, int param0, int param1, int param2, int param3, int param4, int param5) PW_ADDR(0x433c40);
+
 void pw_queue_action(int action_id, int param0, int param1, int param2, int param3, int param4, int param5);
 
 /**
