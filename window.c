@@ -23,6 +23,9 @@
 #include "extlib.h"
 #include "idmap.h"
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS 1
+#include "cimgui.h"
+
 #ifndef WM_MOUSEHWHEEL
 #define WM_MOUSEHWHEEL 0x020E
 #endif
@@ -34,6 +37,7 @@ static struct {
 	int r_height;
 	bool r_fullscreen;
 	bool r_borderless;
+	double r_res_scale;
 } g_cfg;
 
 CSH_REGISTER_VAR_I("r_x", &g_cfg.r_x, -1);
@@ -42,10 +46,94 @@ CSH_REGISTER_VAR_I("r_width", &g_cfg.r_width, 1024);
 CSH_REGISTER_VAR_I("r_height", &g_cfg.r_height, 768);
 CSH_REGISTER_VAR_B("r_fullscreen", &g_cfg.r_fullscreen);
 CSH_REGISTER_VAR_B("r_borderless", &g_cfg.r_borderless);
+CSH_REGISTER_VAR_F("r_res_scale", &g_cfg.r_res_scale, 1.0);
 
 struct rect {
 	int x, y, w, h;
 };
+
+static void __stdcall
+hook_custom_res(void *cfg, bool enable)
+{
+	static int pw, ph;
+	int w, h;
+
+	if (enable) {
+		pw = *(int *)(cfg + 0x13);
+		ph = *(int *)(cfg + 0x17);
+
+		w = pw / g_cfg.r_res_scale;
+		h = ph / g_cfg.r_res_scale;
+	} else {
+		w = pw;
+		h = ph;
+	}
+
+	*(int *)(cfg + 0x13) = w;
+	*(int *)(cfg + 0x17) = h;
+}
+
+TRAMPOLINE(0x40bfb4, 5,
+		"call 0x424fe0;"
+		"push 1;"
+		"push esi;"
+		"call 0x%x;", hook_custom_res);
+
+TRAMPOLINE(0x40c019, 5,
+		"call 0x439c70;"
+		"push 0;"
+		"push esi;"
+		"call 0x%x", hook_custom_res);
+
+
+static void
+res_scale_render_thr_cb(void *ctx1, void *ctx2)
+{
+	float highDPIscaleFactor = ImGui_ImplWin32_GetDpiScaleForHwnd(g_window);
+	d3d_set_dpi_scale(highDPIscaleFactor / g_cfg.r_res_scale);
+}
+
+static void
+res_scale_cb(void *ctx1, void *ctx2)
+{
+	static bool flipper;
+
+	flipper = !flipper;
+	SetWindowPos(g_window, HWND_TOP,
+			0, 0, g_cfg.r_width + flipper, g_cfg.r_height + !flipper,
+			SWP_NOMOVE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+
+	render_thr_post_msg(res_scale_render_thr_cb, NULL, NULL);
+}
+
+CSH_REGISTER_VAR_CALLBACK("r_res_scale")(void)
+{
+    if (g_window) {
+        pw_ui_thread_postmsg(res_scale_cb, NULL, NULL);
+    }
+}
+
+static bool __thiscall
+hooked_a3d_init(void *this_p)
+{
+	bool (*org_fn)(void *this_p) = (void *)0x42c100;
+	int *w = this_p + 0x208;
+	int *h = this_p + 0x20c;
+	int org_w = *w, org_h = *w;
+	bool ret;
+
+	*w *= g_cfg.r_res_scale;
+	*h *= g_cfg.r_res_scale;
+
+	ret = org_fn(this_p);
+
+	*w = org_w;
+	*h = org_h;
+
+	return ret;
+}
+
+PATCH_JMP32(0x42a231, hooked_a3d_init);
 
 static struct rect g_window_size;
 WNDPROC g_orig_event_handler;
@@ -414,11 +502,57 @@ alt_enter_cb(void *arg1, void *arg2)
 	set_fullscreen_cb(NULL, NULL);
 }
 
+static bool __stdcall
+hooked_screen_to_client(HWND hwnd, LPPOINT point)
+{
+	bool ret;
+
+	ret = ScreenToClient(hwnd, point);
+	if (hwnd != g_window) {
+		return ret;
+	}
+
+	point->x *= g_cfg.r_res_scale;
+	point->y *= g_cfg.r_res_scale;
+	return ret;
+}
+
+PATCH_MEM(0x4030c0, 6, "call 0x%x;", hooked_screen_to_client);
+PATCH_MEM(0x4aa6bb, 6, "call 0x%x;", hooked_screen_to_client);
+PATCH_MEM(0x6c928a, 6, "call 0x%x;", hooked_screen_to_client);
+PATCH_MEM(0x6ca268, 6, "call 0x%x;", hooked_screen_to_client);
+PATCH_MEM(0x6d301f, 6, "call 0x%x;", hooked_screen_to_client);
+
+static bool __stdcall
+hooked_client_to_screen(HWND hwnd, LPPOINT point)
+{
+	if (hwnd == g_window) {
+		point->x *= g_cfg.r_res_scale;
+		point->y *= g_cfg.r_res_scale;
+	}
+
+	return ClientToScreen(hwnd, point);
+}
+
+PATCH_MEM(0x401c3c, 6, "call 0x%x;", hooked_client_to_screen);
+PATCH_MEM(0x4027df, 6, "call 0x%x;", hooked_client_to_screen);
+PATCH_MEM(0x4ad519, 6, "call 0x%x;", hooked_client_to_screen);
+PATCH_MEM(0x537e5a, 6, "call 0x%x;", hooked_client_to_screen);
+PATCH_MEM(0x5634c6, 6, "call 0x%x;", hooked_client_to_screen);
+PATCH_MEM(0x6c97d9, 6, "call 0x%x;", hooked_client_to_screen);
+PATCH_MEM(0x6d2013, 6, "call 0x%x;", hooked_client_to_screen);
+
+
 static LRESULT CALLBACK
 hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
 	static bool alt_f4_pressed;
     static bool minimized;
+	static double *r_res_scale;
+
+	if (!r_res_scale) {
+		r_res_scale = csh_get_ptr("r_res_scale");
+	}
 
 	switch(event) {
 	case WM_SIZE:
@@ -443,11 +577,18 @@ hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 	case WM_MOUSEHWHEEL:
 	case WM_MOUSEACTIVATE:
 	case WM_MOUSEMOVE:
-	case WM_MOUSELEAVE:
+	case WM_MOUSELEAVE: {
+		uint16_t *x = (void *)&lparam;
+		uint16_t *y = (void *)&lparam + 2;
+
+		*x /= *r_res_scale;
+		*y /= *r_res_scale;
+
 		if (d3d_handle_mouse(event, data, lparam)) {
 			return TRUE;
 		}
 		break;
+	}
 	case WM_SYSKEYDOWN:
 	case WM_KEYDOWN:
 		switch (data) {
