@@ -76,7 +76,7 @@ console_init(void)
 	g_console.init = true;
 }
 
-static int
+int
 render_thr_post_msg(mg_callback fn, void *arg1, void *arg2)
 {
 	struct thread_msg_ctx *msg = (struct thread_msg_ctx *)calloc(1, sizeof(*msg));
@@ -414,7 +414,7 @@ d3d_try_show_console(void)
 	// Reserve enough left-over height for 1 separator + 1 input text
 	const float footer_height_to_reserve = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
 	ImGui::BeginChild("ScrollingRegion", (ImVec2){0, -footer_height_to_reserve}, false, ImGuiWindowFlags_HorizontalScrollbar);
-	if (ImGui::BeginPopupContextWindow(NULL, 1))
+	if (ImGui::BeginPopupContextWindow("###rmenu", 1))
 	{
 		if (ImGui::Selectable("Clear", false, 0, {0, 0})) console_clear();
 
@@ -497,7 +497,7 @@ d3d_try_show_console(void)
 
 	ImGui::SameLine(0, -1);
 
-	g_console.filter.Draw("", 60);
+	g_console.filter.Draw("###filter", 60);
 
 	ImGui::SameLine(0, -1);
 

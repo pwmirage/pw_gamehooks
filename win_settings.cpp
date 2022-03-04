@@ -199,7 +199,7 @@ d3d_try_show_settings_win(void)
 					ImGui::PopID();
 					ImGui::TableNextColumn();
 					ImGui::PushID(row * 2 + 1);
-					if (ImGui::Button("None", ImVec2(ImGui::GetContentRegionAvailWidth() - 10, 0.0f))) {
+					if (ImGui::Button("None", ImVec2(ImGui::GetContentRegionAvail().x - 10, 0.0f))) {
 						clicked_action_id = row;
 						clicked_button_no = 1;
 					}
@@ -288,7 +288,7 @@ d3d_try_show_settings_win(void)
 
 		if (!g_setting_action_key.listening) {
 			ImGui::SameLine();
-			ImGui::SetCursorPosX(ImGui::GetWindowContentRegionWidth() - 100 + ImGui::GetStyle().WindowPadding.x);
+			ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - 100 + ImGui::GetStyle().WindowPadding.x);
 			if (ImGui::Button("Reset", ImVec2(100, 0))) {
 				g_setting_action_key.listening = true;
 			}

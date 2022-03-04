@@ -442,6 +442,8 @@ hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 	case WM_MOUSEWHEEL:
 	case WM_MOUSEHWHEEL:
 	case WM_MOUSEACTIVATE:
+	case WM_MOUSEMOVE:
+	case WM_MOUSELEAVE:
 		if (d3d_handle_mouse(event, data, lparam)) {
 			return TRUE;
 		}
@@ -494,9 +496,7 @@ hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		}
 		break;
 	case WM_DEVICECHANGE:
-		if (d3d_handle_keyboard(event, data, lparam)) {
-			return TRUE;
-		}
+		d3d_handle_keyboard(event, data, lparam);
 		break;
 	case WM_KILLFOCUS:
 		if ((GetAsyncKeyState(VK_MENU) & 0x8000)
@@ -505,6 +505,10 @@ hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 			ShowWindow(g_window, SW_MINIMIZE);
 			g_pw_data->is_render_active = false;
 		}
+		d3d_handle_keyboard(event, data, lparam);
+		break;
+	case WM_SETFOCUS:
+		d3d_handle_keyboard(event, data, lparam);
 		break;
 	case WM_SYSCOMMAND:
 		switch (data) {
