@@ -418,6 +418,7 @@ static LRESULT CALLBACK
 hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 {
 	static bool alt_f4_pressed;
+    static bool minimized;
 
 	switch(event) {
 	case WM_SIZE:
@@ -510,14 +511,22 @@ hooked_event_handler(HWND window, UINT event, WPARAM data, LPARAM lparam)
 		case SC_MINIMIZE:
 			/* PW doesnt react to this message and keeps using CPU, so make it stop */
 			g_pw_data->is_render_active = false;
+            minimized = true;
 			break;
 		case SC_RESTORE:
 			g_pw_data->is_render_active = true;
+            minimized = false;
 			break;
 		default:
 			break;
 		}
 		break;
+    case WM_ACTIVATEAPP:
+        if (minimized && data) {
+            /* sometimes we get this event right after minimizing; don't un-pause the game! */
+            return 1;
+        }
+        break;
 	case WM_MENUCHAR:
 		CallWindowProc(g_orig_event_handler, window, event, data, lparam);
 		/* do not beep! */
