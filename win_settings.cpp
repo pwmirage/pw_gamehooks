@@ -104,11 +104,21 @@ d3d_try_show_settings_win(void)
 			ImGui::BeginChild("ScrollingRegion", {0, -30}, false,
 							ImGuiWindowFlags_HorizontalScrollbar);
 
+			static bool *r_fullscreen = NULL;
+			static bool *r_borderless = NULL;
+			const char *fullscreen_combo_txts[] = { "Windowed", "Borderless Fullscreen", "Fullscreen" };
+			int fullscreen_combo_cur_idx = 0;
 
+			if (!r_fullscreen) {
+				r_fullscreen = (bool *)csh_get_ptr("r_fullscreen");
+				r_borderless = (bool *)csh_get_ptr("r_borderless");
+			}
 
-			const char* items[] = { "Windowed", "Borderless Fullscreen", "Fullscreen" };
-			static int item_current_idx = 0;
-			const char* combo_label = items[item_current_idx];
+			if (*r_fullscreen) {
+				fullscreen_combo_cur_idx = *r_borderless ? 1 : 2;
+			} else {
+				fullscreen_combo_cur_idx = 0;
+			}
 
 			ImGui::AlignTextToFramePadding();
 			ImGui::Text("Fullscreen:");
@@ -117,13 +127,22 @@ d3d_try_show_settings_win(void)
 			ImGui::SetNextItemWidth(200);
 			ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0);
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 5));
-			if (ImGui::BeginCombo("###fullscreen_combo", combo_label, 0))
+			if (ImGui::BeginCombo("###fullscreen_combo", fullscreen_combo_txts[fullscreen_combo_cur_idx], 0))
 			{
-				for (int n = 0; n < IM_ARRAYSIZE(items); n++)
+				for (int n = 0; n < IM_ARRAYSIZE(fullscreen_combo_txts); n++)
 				{
-					const bool is_selected = (item_current_idx == n);
-					if (ImGui::Selectable(items[n], is_selected))
-						item_current_idx = n;
+					const bool is_selected = (fullscreen_combo_cur_idx == n);
+					if (ImGui::Selectable(fullscreen_combo_txts[n], is_selected)) {
+						fullscreen_combo_cur_idx = n;
+						if (fullscreen_combo_cur_idx == 0) {
+							csh_set_b("r_fullscreen", 0);
+							csh_set_b("r_borderless", 0);
+						} else {
+							csh_set_b("r_fullscreen", 1);
+							csh_set_b("r_borderless", fullscreen_combo_cur_idx == 1);
+						}
+						pw_log("selected %d", n);
+					}
 
 					// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
 					if (is_selected)
