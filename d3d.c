@@ -83,6 +83,10 @@ hooked_a3d_end_scene(void *device_d3d8)
 		ImGui_ImplWin32_Init(g_window);
 		g_d3d_ptrs->init(device);
 		d3d_imgui_init();
+
+		ImGui_ImplWin32_EnableDpiAwareness();
+		float highDPIscaleFactor = ImGui_ImplWin32_GetDpiScaleForHwnd(g_window);
+		d3d_set_dpi_scale(highDPIscaleFactor);
 	}
 
 	g_d3d_ptrs->new_frame();
@@ -99,8 +103,6 @@ hooked_a3d_end_scene(void *device_d3d8)
 			igShowDemoWindow(NULL);
 		}
 	}
-
-	igGetIO()->MouseDrawCursor = false;
 
 	igEndFrame();
 	igRender();

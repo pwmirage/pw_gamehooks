@@ -88,6 +88,12 @@ d3d_imgui_init(void)
 	colors[ImGuiCol_TabUnfocusedActive] = (ImVec4){ 0.16f, 0.17f, 0.18f, 1.00f };
 	colors[ImGuiCol_TableRowBgAlt] = (ImVec4){ 0.18f, 0.18f, 0.18f, 0.06f };
 	colors[ImGuiCol_ModalWindowDimBg] = (ImVec4){0.00f, 0.00f, 0.00f, 0.80f};
+}
+
+void
+d3d_set_dpi_scale(float scale)
+{
+	ImGuiStyle &style = ImGui::GetStyle();
 
 	style.PopupRounding = 3;
 
@@ -107,6 +113,9 @@ d3d_imgui_init(void)
 	style.FrameRounding     = 3;
 	style.ScrollbarRounding = 2;
 	style.GrabRounding      = 3;
+
+	ImGui::GetStyle().ScaleAllSizes(scale);
+
 }
 
 void

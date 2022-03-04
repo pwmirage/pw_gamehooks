@@ -28,6 +28,9 @@ void d3d_console_argb_printf(uint32_t argb_color, const char* fmt, ...);
 void d3d_console_toggle(void);
 
 void d3d_imgui_init(void);
+void d3d_set_dpi_scale(float scale);
+typedef void (*render_thr_cb)(void *arg1, void *arg2);
+int render_thr_post_msg(render_thr_cb fn, void *arg1, void *arg2);
 void d3d_show_help_marker(const char* desc);
 void d3d_try_show_settings_win(void);
 void d3d_try_show_console(void);
@@ -68,6 +71,15 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
     ImGui::SetCursorPosX(px + 69); \
 	ImGui::SetNextItemWidth(150); \
     ImGui::InputInt("###" label, ptr); \
+})
+
+#define ImGuiW_InputDouble(ptr, label) \
+({ \
+    int px = ImGui::GetCursorPosX(); \
+    ImGuiW_LabelLeft(label); \
+    ImGui::SetCursorPosX(px + 69); \
+	ImGui::SetNextItemWidth(150); \
+    ImGui::InputDouble("###" label, ptr); \
 })
 
 #define ImGuiW_InputIntVar(varname, label) \
@@ -120,6 +132,25 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
         assert(ptr != NULL); \
     } \
     ImGuiW_InputInt(ptr, label); \
+    has_focus = ImGui::IsItemFocused(); \
+    ret = had_focus && !has_focus; \
+    had_focus = has_focus; \
+    if (ret) { \
+        csh_set_i(varname, *ptr); \
+    } \
+    ret; \
+})
+
+#define ImGuiW_InputDoubleShadowFocusVar(varname, label) \
+({ \
+    static double *ptr = NULL; \
+    static bool had_focus = false; \
+    bool has_focus, ret; \
+    if (ptr == NULL) { \
+        ptr = mem_region_get_i32("_shadow_" varname); \
+        assert(ptr != NULL); \
+    } \
+    ImGuiW_InputDouble(ptr, label); \
     has_focus = ImGui::IsItemFocused(); \
     ret = had_focus && !has_focus; \
     had_focus = has_focus; \
