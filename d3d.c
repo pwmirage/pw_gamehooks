@@ -65,13 +65,6 @@ static unsigned __stdcall
 hooked_a3d_end_scene(void *device_d3d8)
 {
 	unsigned __stdcall (*real_end_scene)(PDIRECT3DDEVICE9 device) = *(void **)(*(void **)device_d3d8 + 0x8c);
-	static double *r_res_scale;
-	static int *r_x, *r_y;
-	if (!r_res_scale) {
-		r_res_scale = csh_get_ptr("r_res_scale");
-		r_x = csh_get_ptr("r_x");
-		r_y = csh_get_ptr("r_y");
-	}
 
 	if (!g_device) {
 		void *device;
@@ -92,16 +85,12 @@ hooked_a3d_end_scene(void *device_d3d8)
 		d3d_imgui_init();
 
 		ImGui_ImplWin32_EnableDpiAwareness();
+		float highDPIscaleFactor = ImGui_ImplWin32_GetDpiScaleForHwnd(g_window);
+		d3d_set_dpi_scale(highDPIscaleFactor);
 	}
 
 	g_d3d_ptrs->new_frame();
 	ImGui_ImplWin32_NewFrame();
-
-	ImGuiIO *io = igGetIO();
-	io->MouseDrawCursor = false;
-	io->DisplaySize.x /= *r_res_scale;
-	io->DisplaySize.y /= *r_res_scale;
-
 	igNewFrame();
 
 	if (!g_disable_all_overlay) {
