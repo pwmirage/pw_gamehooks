@@ -39,6 +39,7 @@ static struct {
 void
 d3d_try_show_settings_win(void)
 {
+	ImGuiIO &io = ImGui::GetIO();
 	bool check, changed = false;
 	int clicked_action_id = HOTKEY_A_NONE;
 	static int clicked_button_no = 0;
@@ -109,10 +110,8 @@ d3d_try_show_settings_win(void)
 			ImGui::SetNextItemWidth(200);
 			ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0);
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 5));
-			if (ImGui::BeginCombo("###fullscreen_combo", fullscreen_combo_txts[fullscreen_combo_cur_idx], 0))
-			{
-				for (int n = 0; n < IM_ARRAYSIZE(fullscreen_combo_txts); n++)
-				{
+			if (ImGui::BeginCombo("###fullscreen_combo", fullscreen_combo_txts[fullscreen_combo_cur_idx], 0)) {
+				for (int n = 0; n < IM_ARRAYSIZE(fullscreen_combo_txts); n++) {
 					const bool is_selected = (fullscreen_combo_cur_idx == n);
 					if (ImGui::Selectable(fullscreen_combo_txts[n], is_selected)) {
 						fullscreen_combo_cur_idx = n;
@@ -126,8 +125,9 @@ d3d_try_show_settings_win(void)
 					}
 
 					// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-					if (is_selected)
+					if (is_selected) {
 						ImGui::SetItemDefaultFocus();
+					}
 				}
 				ImGui::EndCombo();
 			}
@@ -136,17 +136,37 @@ d3d_try_show_settings_win(void)
 			ImGui::SameLine();
 			d3d_show_help_marker("You can switch this at any time with Alt+Enter");
 
-			ImGuiW_InputIntShadowFocusVar("r_x", "Pos. x:");
-			ImGui::SameLine();
-			ImGuiW_InputIntShadowFocusVar("r_y", "Pos. y:");
+			if (ImGui::BeginTable("pos_table", 2)) {
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGuiW_InputIntShadowFocusVar("r_x", "Pos. x:");
+				ImGui::TableNextColumn();
+				ImGuiW_InputIntShadowFocusVar("r_y", "Pos. y:");
 
-			ImGui::Checkbox("Save window position to cfg", &save_pos_to_cfg);
-			ImGui::SameLine();
-			d3d_show_help_marker("Window position doesn't get saved by default for extra convenience.");
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::Checkbox("Save window position to cfg", &save_pos_to_cfg);
+				ImGui::SameLine();
+				d3d_show_help_marker(
+						"Window position doesn't get saved by default for extra convenience.");
 
-			ImGuiW_InputIntShadowFocusVar("r_width", "Width:");
-			ImGui::SameLine();
-			ImGuiW_InputIntShadowFocusVar("r_height", "Height:");
+				ImGui::TableNextColumn();
+				/* empty */
+
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGuiW_InputIntShadowFocusVar("r_width", "Width:");
+				ImGui::TableNextColumn();
+				ImGuiW_InputIntShadowFocusVar("r_height", "Height:");
+
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGuiW_DragFloat(&io.FontGlobalScale, "UI Scaling",
+						0.005f, 0.5, 2.0, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+				ImGui::TableNextColumn();
+				/* empty */
+				ImGui::EndTable();
+			}
 
 			ImGuiW_CheckboxVar("r_borderless", "Borderless window");
 			ImGui::SameLine();

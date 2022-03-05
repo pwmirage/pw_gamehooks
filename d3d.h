@@ -64,23 +64,38 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
     ret; \
 })
 
-#define ImGuiW_InputInt(ptr, label) \
+#define ImGuiW_InputLabel(label) \
 ({ \
     int px = ImGui::GetCursorPosX(); \
     ImGuiW_LabelLeft(label); \
-    ImGui::SetCursorPosX(px + 69); \
-	ImGui::SetNextItemWidth(150); \
+    ImGui::SetCursorPosX(px + 69 * io.FontGlobalScale); \
+	ImGui::SetNextItemWidth(150 * io.FontGlobalScale); \
+})
+
+#define ImGuiW_InputInt(ptr, label) \
+({ \
+    ImGuiW_InputLabel(label); \
     ImGui::InputInt("###" label, ptr); \
 })
 
-#define ImGuiW_InputDouble(ptr, label) \
+#define ImGuiW_InputFloat(ptr, label, ...) \
 ({ \
-    int px = ImGui::GetCursorPosX(); \
-    ImGuiW_LabelLeft(label); \
-    ImGui::SetCursorPosX(px + 69); \
-	ImGui::SetNextItemWidth(150); \
-    ImGui::InputDouble("###" label, ptr); \
+    ImGuiW_InputLabel(label); \
+    ImGui::InputFloat("###" label, ptr, __VA_ARGS__); \
 })
+
+#define ImGuiW_InputDouble(ptr, label, ...) \
+({ \
+    ImGuiW_InputLabel(label); \
+    ImGui::InputDouble("###" label, ptr, __VA_ARGS__); \
+})
+
+#define ImGuiW_DragFloat(ptr, label, ...) \
+({ \
+    ImGuiW_InputLabel(label); \
+    ImGui::DragFloat("###" label, ptr, __VA_ARGS__); \
+})
+
 
 #define ImGuiW_InputIntVar(varname, label) \
 ({ \
@@ -141,7 +156,7 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
     ret; \
 })
 
-#define ImGuiW_InputDoubleShadowFocusVar(varname, label) \
+#define ImGuiW_InputDoubleShadowFocusVar(varname, label, ...) \
 ({ \
     static double *ptr = NULL; \
     static bool had_focus = false; \
@@ -150,7 +165,7 @@ bool d3d_settings_handle_keyboard(UINT event, WPARAM data, LPARAM lparam);
         ptr = mem_region_get_i32("_shadow_" varname); \
         assert(ptr != NULL); \
     } \
-    ImGuiW_InputDouble(ptr, label); \
+    ImGuiW_InputDouble(ptr, label, __VA_ARGS__); \
     has_focus = ImGui::IsItemFocused(); \
     ret = had_focus && !has_focus; \
     had_focus = has_focus; \
