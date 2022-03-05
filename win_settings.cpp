@@ -88,7 +88,7 @@ d3d_try_show_settings_win(void)
 
 			static bool *r_fullscreen = NULL;
 			static bool *r_borderless = NULL;
-			const char *fullscreen_combo_txts[] = { "Windowed", "Borderless Fullscreen", "Fullscreen" };
+			const char *fullscreen_combo_txts[] = { "Windowed", "Borderless Fullscreen" };
 			int fullscreen_combo_cur_idx = 0;
 
 			if (!r_fullscreen) {
@@ -121,9 +121,8 @@ d3d_try_show_settings_win(void)
 							csh_set_b("r_borderless", 0);
 						} else {
 							csh_set_b("r_fullscreen", 1);
-							csh_set_b("r_borderless", fullscreen_combo_cur_idx == 1);
+							csh_set_b("r_borderless", 1);
 						}
-						pw_log("selected %d", n);
 					}
 
 					// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
@@ -133,6 +132,9 @@ d3d_try_show_settings_win(void)
 				ImGui::EndCombo();
 			}
 			ImGui::PopStyleVar(2);
+
+			ImGui::SameLine();
+			d3d_show_help_marker("You can switch this at any time with Alt+Enter");
 
 			ImGuiW_InputIntShadowFocusVar("r_x", "Pos. x:");
 			ImGui::SameLine();
@@ -181,7 +183,7 @@ d3d_try_show_settings_win(void)
 					ImGui::PopID();
 					ImGui::TableNextColumn();
 					ImGui::PushID(row * 2 + 1);
-					if (ImGui::Button("None", ImVec2(ImGui::GetContentRegionAvail().x - 10, 0.0f))) {
+					if (ImGui::Button("None", ImVec2(ImGui::GetWindowContentRegionMin().x - 10, 0.0f))) {
 						clicked_action_id = row;
 						clicked_button_no = 1;
 					}
@@ -267,24 +269,29 @@ d3d_try_show_settings_win(void)
 			ImGui::PopStyleColor();
 		}
 
-
 		if (!g_setting_action_key.listening) {
 			ImGui::SameLine();
-			ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - 100 + ImGui::GetStyle().WindowPadding.x);
+			ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - 100);
 			if (ImGui::Button("Reset", ImVec2(100, 0))) {
+				g_setting_action_key.str[0] = 0;
 				g_setting_action_key.listening = true;
 			}
 		}
 
 		ImGui::NewLine();
 		ImGui::Separator();
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3);
 
 		if (ImGui::Button("OK", ImVec2(140, 0))) {
+			if (!g_setting_action_key.listening) {
+				/* TODO csh_cmdf */
+				pw_log("bind \"%s\" \"%s\"", g_setting_action_key.str,
+						mg_input_action_to_str(g_setting_action_id));
+			}
 			ImGui::CloseCurrentPopup();
 		}
 
 		ImGui::SameLine();
-
 		ImGui::SetItemDefaultFocus();
 
 		if (ImGui::Button("Cancel", ImVec2(140, 0))) {
