@@ -27,24 +27,6 @@ bool g_settings_show = true;
 static int g_setting_action_id = HOTKEY_A_NONE;
 
 static struct {
-	bool r_render_nofocus;
-} g_cfg;
-
-CSH_REGISTER_VAR_B("r_render_nofocus", &g_cfg.r_render_nofocus);
-CSH_REGISTER_VAR_CALLBACK("r_render_nofocus")(void) {
-	if (g_cfg.r_render_nofocus) {
-		patch_mem(0x42ba47, "\x0f\x95\xc0", 3);
-	} else {
-		patch_mem(0x42ba47, "\xc6\xc0\x01", 3);
-	}
-};
-
-static bool *g_r_head_hp_bar = (bool *)0x927d97;
-CSH_REGISTER_VAR_B("r_head_hp_bar", g_r_head_hp_bar);
-static bool *g_r_head_mp_bar = (bool *)0x927d98;
-CSH_REGISTER_VAR_B("r_head_mp_bar", g_r_head_mp_bar);
-
-static struct {
 	bool listening;
 	int key;
 	int key_wparam;

@@ -34,6 +34,7 @@ static struct {
 	int r_height;
 	bool r_fullscreen;
 	bool r_borderless;
+	bool r_render_nofocus;
 } g_cfg;
 
 CSH_REGISTER_VAR_I("r_x", &g_cfg.r_x, -1);
@@ -42,6 +43,12 @@ CSH_REGISTER_VAR_I("r_width", &g_cfg.r_width, 1024);
 CSH_REGISTER_VAR_I("r_height", &g_cfg.r_height, 768);
 CSH_REGISTER_VAR_B("r_fullscreen", &g_cfg.r_fullscreen);
 CSH_REGISTER_VAR_B("r_borderless", &g_cfg.r_borderless);
+CSH_REGISTER_VAR_B("r_render_nofocus", &g_cfg.r_render_nofocus);
+
+static bool *g_r_head_hp_bar = (bool *)0x927d97;
+CSH_REGISTER_VAR_B("r_head_hp_bar", g_r_head_hp_bar);
+static bool *g_r_head_mp_bar = (bool *)0x927d98;
+CSH_REGISTER_VAR_B("r_head_mp_bar", g_r_head_mp_bar);
 
 struct rect {
 	int x, y, w, h;
@@ -203,6 +210,14 @@ CSH_REGISTER_VAR_CALLBACK("r_y")(void) { on_window_size_pos_changed(DIM_CHANGE_Y
 CSH_REGISTER_VAR_CALLBACK("r_width")(void) { on_window_size_pos_changed(DIM_CHANGE_WIDTH); }
 CSH_REGISTER_VAR_CALLBACK("r_height")(void) { on_window_size_pos_changed(DIM_CHANGE_HEIGHT); }
 
+CSH_REGISTER_VAR_CALLBACK("r_render_nofocus")(void) {
+	if (g_cfg.r_render_nofocus) {
+		patch_mem(0x42ba47, "\x0f\x95\xc0", 3);
+	} else {
+		patch_mem(0x42ba47, "\xc6\xc0\x01", 3);
+	}
+};
+
 /* don't alter window sizing; don't force 16:9 */
 PATCH_MEM(0x42bb92, 2, "nop; nop");
 
@@ -314,11 +329,9 @@ hooked_read_local_cfg_opt(void *unk1, const char *section, const char *name, int
 		} else if (strcmp(name, "RenderHei") == 0) {
 			return g_cfg.r_height;
 		} else if (strcmp(name, "FullScreen") == 0) {
-			if (g_cfg.r_borderless) {
-				return 0;
-			} else {
-				return g_cfg.r_fullscreen;
-			}
+			return 0;
+		} else if (strcmp(name, "WideScreen") == 0) {
+			return 0;
 		}
 	}
 
