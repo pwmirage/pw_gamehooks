@@ -164,14 +164,6 @@ d3d_handle_mouse(UINT event, WPARAM data, LPARAM lparam)
 	}
 
 	ImGui_ImplWin32_WndProcHandler(g_window, event, data, lparam);
-	if (event == WM_MOUSEACTIVATE) {
-		g_mouse_activated = true;
-	} else if (g_mouse_activated) {
-		igUpdateHoveredWindowAndCaptureFlags();
-		ImGui_ImplWin32_UpdateMousePos();
-		g_mouse_activated = false;
-	}
-
 	return igGetIO()->WantCaptureMouse;
 }
 
