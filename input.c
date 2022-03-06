@@ -19,6 +19,7 @@
 #include "pw_api.h"
 #include "common.h"
 #include "d3d.h"
+#include "csh.h"
 
 union hotkey_mod_mask {
 	struct {
@@ -128,7 +129,7 @@ mg_input_action_to_str(int id)
 	return "Unknown";
 }
 
-const char *g_keynames[] = {
+static const char *g_keynames[] = {
 	"Unknown 0x00",
 	"LMB",
 	"RMB",
@@ -529,10 +530,6 @@ get_mapped_action(int event, int keycode)
 		return HOTKEY_A_NONE;
 	}
 
-	if (keycode >= 'A' && keycode <= 'Z') {
-		keycode += 'a' - 'A';
-	}
-
 	mask.shift = !!(GetAsyncKeyState(VK_SHIFT) & 0x8000);
 	mask.ctrl = !!(GetAsyncKeyState(VK_CONTROL) & 0x8000);
 
@@ -562,9 +559,9 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 		return false;
 	}
 
-	pw_log("event=%x, keycode=%x, mods=%x", event, keycode, mods);
-
+	keycode = mg_winevent_to_event(keycode, mods);
 	action = get_mapped_action(event, keycode);
+	pw_log("event=%x, keycode=%x, mods=%x => %d", event, keycode, mods, action);
 	switch (action) {
 	case HOTKEY_A_GM_CONSOLE: {
 		struct ui_dialog *dialog = pw_get_dialog(ui_man, "Win_GMConsole");
@@ -575,6 +572,11 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 		}
 		return true;
 	}
+	case HOTKEY_A_HIDEUI:
+		if (!is_repeat) {
+			ui_man->show_ui = !ui_man->show_ui;
+			g_disable_all_overlay = !ui_man->show_ui;
+		}
 	default:
 		break;
 	}
@@ -701,12 +703,6 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 				pw_dialog_on_command(qbar, "stop");
 				return true;
 			}
-			case 'h': {
-				if (!is_repeat) {
-					ui_man->show_ui = !ui_man->show_ui;
-					g_disable_all_overlay = !ui_man->show_ui;
-				}
-			}
 			default:
 				break;
 		}
@@ -826,3 +822,102 @@ init(void)
 {
 	_set_key((struct hotkey){ .key = 'g', .action = HOTKEY_A_GM_CONSOLE, .mods = { .ctrl = 1 }});
 }
+
+/** strip preceeding and following quotes and whitespaces */
+static char *
+cleanup_str(char *str, const char *chars_to_remove)
+{
+	int len = strlen(str);
+	char *end = str + len - 1;
+
+	while (*str) {
+		if (*str == '\\' && *(str + 1) == '"') {
+			str += 2;
+			continue;
+		} else if (strchr(chars_to_remove, *str)) {
+			*str = 0;
+			str++;
+			continue;
+		}
+		break;
+	}
+
+	while (end > str) {
+		if (*(end - 1) == '\\' && *end == '"') {
+			end -= 2;
+			continue;
+		} else if (strchr(chars_to_remove, *end)) {
+			*end = 0;
+			end--;
+			continue;
+		}
+		break;
+	}
+
+	return str;
+}
+
+static const char *
+bind_cmd_handler(const char *val, void *ctx)
+{
+	static char res_buf[168];
+	char buf[128];
+	char *c;
+	char *words[3];
+	int wordcnt = sizeof(words) / sizeof(words[0]);
+	int hotkey_id, action_id;
+	union hotkey_mod_mask mods = {0};
+	int rc;
+
+	snprintf(buf, sizeof(buf), "%s", val);
+	rc = split_string_to_words(buf, words, &wordcnt);
+
+	if (rc != 0 || wordcnt != 2) {
+		return "^ff0000Usage: bind <hotkeys> <action>";
+	}
+
+	if (strstr(words[0], "Ctrl ")) {
+		mods.ctrl = 1;
+	}
+
+	if (strstr(words[0], "Shift ")) {
+		mods.shift = 1;
+	}
+
+	if (strstr(words[0], "Alt ")) {
+		mods.alt = 1;
+	}
+
+	c = strrchr(words[0], '+');
+	if (!c) {
+		c = words[0];
+	}
+	c = cleanup_str(c, " ");
+	for (hotkey_id = 0; hotkey_id < sizeof(g_keynames) / sizeof(g_keynames[0]); hotkey_id++) {
+		if (strcmp(c, g_keynames[hotkey_id]) == 0) {
+			break;
+		}
+	}
+
+	if (hotkey_id == sizeof(g_keynames) / sizeof(g_keynames[0])) {
+		snprintf(res_buf, sizeof(res_buf), "^ff0000Unknown hotkey: \"%s\"", c);
+		return res_buf;
+	}
+
+	for (action_id = 1; action_id < HOTKEY_A_MAX; action_id++) {
+		if (strcmp(words[1], mg_input_action_to_str(action_id)) == 0) {
+			break;
+		}
+	}
+
+	if (action_id == HOTKEY_A_MAX) {
+		snprintf(res_buf, sizeof(res_buf), "^ff0000Unknown action: \"%s\"", words[1]);
+		return res_buf;
+	}
+
+	pw_log("setting \"%s\" to \"%d\"", words[0], hotkey_id);
+	_set_key((struct hotkey){ .key = hotkey_id, .action = action_id, .mods = mods });
+	return "";
+}
+
+CSH_REGISTER_CMD("bind", bind_cmd_handler);
