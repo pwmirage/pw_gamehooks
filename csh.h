@@ -207,9 +207,40 @@ CSH_UNIQUENAME(init_csh_register_var_fn)(void) \
 #define _CSH_REGISTER_VAR_CALLBACK_CHOOSER(...) \
     GET_3RD_ARG(__VA_ARGS__, _CSH_REGISTER_VAR_CALLBACK, _CSH_REGISTER_VAR_CALLBACK_INLINE, )
 
+#define CSH_REGISTER_VAR_CALLBACK(...) \
+    _CSH_REGISTER_VAR_CALLBACK_CHOOSER(__VA_ARGS__)(__VA_ARGS__)
+
+
+/** Statically register a cmd handler */
+#define _CSH_REGISTER_CMD_INLINE(name_p) \
+static void CSH_UNIQUENAME(init_csh_register_cmd_fn)(void); \
+static void __attribute__((constructor (104))) \
+CSH_UNIQUENAME(init_csh_register_cmd_fn)(void) \
+{ \
+    csh_register_cmd(name_p, CSH_UNIQUENAME(init_csh_register_cmd_fn), NULL); \
+} \
+static void CSH_UNIQUENAME(init_csh_register_cmd_fn)
+
+#define _CSH_REGISTER_CMD(name_p, cb_fn_p) \
+static void __attribute__((constructor (104))) \
+CSH_UNIQUENAME(init_csh_register_cmd_fn)(void) \
+{ \
+    csh_register_cmd(name_p, cb_fn_p, NULL); \
+}
+
+#define _CSH_REGISTER_VAR_CALLBACK_CHOOSER(...) \
+    GET_3RD_ARG(__VA_ARGS__, _CSH_REGISTER_VAR_CALLBACK, _CSH_REGISTER_VAR_CALLBACK_INLINE, )
 
 #define CSH_REGISTER_VAR_CALLBACK(...) \
     _CSH_REGISTER_VAR_CALLBACK_CHOOSER(__VA_ARGS__)(__VA_ARGS__)
+
+
+#define CSH_REGISTER_CMD(prefix, cmd) \
+static void __attribute__((constructor (106))) \
+CSH_UNIQUENAME(init_csh_register_cmd_fn)(void) \
+{ \
+    csh_register_cmd(prefix, cmd, NULL); \
+}
 
 #ifdef __cplusplus
 }
