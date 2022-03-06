@@ -34,6 +34,68 @@
 
 #include "pw_api.h"
 
+int
+split_string_to_words(char *input, char **argv, int *argc)
+{
+    char *c, *start;
+    bool in_quotes = false;
+	int cur_argc = 0;
+    int rc = 0;
+
+    #define NEW_WORD() \
+    ({ \
+        *c = 0; \
+		if (*start) { \
+			argv[cur_argc++] = start; \
+			if (cur_argc == *argc) { \
+				break; \
+			} \
+		} \
+        start = c + 1; \
+    })
+
+    c = start = input;
+    while (*c) {
+        if (*c == '"') {
+            if (in_quotes) {
+                if (*(c + 1) != ' ' && *(c + 1) != 0) {
+                    /* characters right after quote */
+                    return -EINVAL;
+                }
+
+                in_quotes = false;
+                NEW_WORD();
+				if (*(c + 1) != 0) { /* unless it's the end of input */
+					*(c + 1) = 0;  /* skip the space too */
+					c++; start++;
+				}
+            } else {
+                if (c > input && *(c - 1) != 0) {
+                    /* quote right after characters (a space would be modified into NUL) */
+                    return -EINVAL;
+                }
+
+                start = c + 1; /* dont include opening quote in the stirng */
+                in_quotes = true;
+            }
+        } else if (*c == ' ' && !in_quotes) {
+            NEW_WORD();
+        }
+        c++;
+    }
+
+    if (*c == 0) {
+        do {
+            NEW_WORD();
+        } while (0);
+    }
+
+	#undef NEW_WORD
+
+	*argc = cur_argc;
+    return rc;
+}
+
 void *
 ring_buffer_push(struct ring_buffer *ring, void *data)
 {

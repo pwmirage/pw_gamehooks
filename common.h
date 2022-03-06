@@ -60,6 +60,19 @@ void *ring_buffer_pop(struct ring_buffer *ring);
 void *ring_buffer_peek(struct ring_buffer *ring, int off);
 struct ring_buffer *ring_buffer_alloc(size_t size);
 
+/**
+ * Split input by spaces, put the parts into the provided array.
+ * This function is quote-aware. If multiple words are quoted they
+ * will be put into a single argv slot (with the quotes stripped).
+ *
+ * \param input string to be split, will be modified
+ * \param argv output array
+ * \param argc max capacity of argv, will be modified with actual
+ * number of parts.
+ * \return 0 on success, negative errno otherwise
+ */
+int split_string_to_words(char *input, char **argv, int *argc);
+
 void patch_mem(uintptr_t addr, const char *buf, unsigned num_bytes);
 void patch_mem_u32(uintptr_t addr, uint32_t u32);
 void patch_mem_u16(uintptr_t addr, uint16_t u16);
