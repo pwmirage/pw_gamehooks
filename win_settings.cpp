@@ -304,8 +304,7 @@ d3d_try_show_settings_win(void)
 
 		if (ImGui::Button("OK", ImVec2(140, 0))) {
 			if (!g_setting_action_key.listening) {
-				/* TODO csh_cmdf */
-				pw_log("bind \"%s\" \"%s\"", g_setting_action_key.str,
+				csh_cmdf("bind \"%s\" \"%s\"", g_setting_action_key.str,
 						mg_input_action_to_str(g_setting_action_id));
 			}
 			ImGui::CloseCurrentPopup();

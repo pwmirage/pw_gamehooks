@@ -45,6 +45,7 @@ const char *
 mg_input_action_to_str(int id)
 {
 	switch (id) {
+	case HOTKEY_A_NONE: return "None";
 	case HOTKEY_A_SKILL_1_1: return "Skill 1 (Bottom bar)";
 	case HOTKEY_A_SKILL_1_2: return "Skill 2 (Bottom bar)";
 	case HOTKEY_A_SKILL_1_3: return "Skill 3 (Bottom bar)";
@@ -555,6 +556,30 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 	struct ui_dialog *dialog;
 	enum mg_input_action action;
 
+	if (event == WM_KEYDOWN && keycode == VK_RETURN) do {
+		struct ui_dialog *dialog;
+		struct ui_dialog_el *el;
+
+		if (is_repeat) {
+			break;
+		}
+
+		if (ui_man->focused_dialog && ui_man->focused_dialog->focused_el &&
+			ui_man->focused_dialog->focused_el->type == 4) {
+			/* text field focused */
+			break;
+		}
+
+		dialog = pw_get_dialog(ui_man, "Win_Chat");
+		el = pw_dialog_get_el(dialog, "DEFAULT_Txt_Speech");
+
+		pw_bring_dialog_to_front(ui_man, dialog);
+		((void __thiscall (*)(void *, bool))el->fn_tbl[14])(el, 1);
+		pw_dialog_change_focus(dialog, el);
+
+		return true;
+	} while (0);
+
 	if (g_pw_data->game->player->is_in_cosmetician) {
 		return false;
 	}
@@ -577,220 +602,167 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 			ui_man->show_ui = !ui_man->show_ui;
 			g_disable_all_overlay = !ui_man->show_ui;
 		}
+	case HOTKEY_A_SKILL_1_1:
+	case HOTKEY_A_SKILL_1_2:
+	case HOTKEY_A_SKILL_1_3:
+	case HOTKEY_A_SKILL_1_4:
+	case HOTKEY_A_SKILL_1_5:
+	case HOTKEY_A_SKILL_1_6:
+	case HOTKEY_A_SKILL_1_7:
+	case HOTKEY_A_SKILL_1_8:
+	case HOTKEY_A_SKILL_1_9:
+		pw_quickbar_command_skill(1, action - HOTKEY_A_SKILL_1_1);
+		return true;
+	case HOTKEY_A_SKILL_2_1:
+	case HOTKEY_A_SKILL_2_2:
+	case HOTKEY_A_SKILL_2_3:
+	case HOTKEY_A_SKILL_2_4:
+	case HOTKEY_A_SKILL_2_5:
+	case HOTKEY_A_SKILL_2_6:
+	case HOTKEY_A_SKILL_2_7:
+	case HOTKEY_A_SKILL_2_8:
+	case HOTKEY_A_SKILL_2_9:
+		pw_quickbar_command_skill(2, action - HOTKEY_A_SKILL_2_1);
+		return true;
+	case HOTKEY_A_SKILL_3_1:
+	case HOTKEY_A_SKILL_3_2:
+	case HOTKEY_A_SKILL_3_3:
+	case HOTKEY_A_SKILL_3_4:
+	case HOTKEY_A_SKILL_3_5:
+	case HOTKEY_A_SKILL_3_6:
+	case HOTKEY_A_SKILL_3_7:
+	case HOTKEY_A_SKILL_3_8:
+	case HOTKEY_A_SKILL_3_9:
+		pw_quickbar_command_skill(3, action - HOTKEY_A_SKILL_3_1);
+		return true;
+	case HOTKEY_A_ROLL: {
+		pw_queue_action(0x125, 0, 0, 0, 0, 0, 0);
+		return true;
+	}
+	case HOTKEY_A_MAP: {
+		dialog = get_open_world_map_dialog(ui_man);
+		if (dialog) {
+			pw_dialog_on_command(dialog, "IDCANCEL");
+		} else {
+			pw_open_map_window(ui_man->map_manager, "bigmap");
+		}
+		return true;
+	}
+	case HOTKEY_A_CHARACTER:
+		pw_open_character_window(ui_man->dlg_manager, "wcharacter");
+		return true;
+	case HOTKEY_A_INVENTORY:
+		pw_open_inventory_window(ui_man->dlg_manager, "winventory");
+		return true;
+	case HOTKEY_A_SKILLS:
+		pw_open_skill_window(ui_man->dlg_manager, "wskill");
+		return true;
+	case HOTKEY_A_QUESTS:
+		pw_open_quest_window(ui_man->dlg_manager, "quest");
+		return true;
+	case HOTKEY_A_ACTIONS:
+		pw_open_action_window(ui_man->dlg_manager2, "waction");
+		return true;
+	case HOTKEY_A_PARTY:
+		pw_open_team_window(ui_man->dlg_manager2, "wteam");
+		return true;
+	case HOTKEY_A_FRIENDS:
+		pw_open_friend_window(ui_man->dlg_manager2, "wfriend");
+		return true;
+	case HOTKEY_A_FACTION:
+		pw_open_faction_window(ui_man->dlg_manager2, "wfaction");
+		return true;
+	case HOTKEY_A_PETS:
+		pw_open_pet_window(ui_man->dlg_manager2, "wpet");
+		return true;
+	case HOTKEY_A_HELP:
+		pw_open_help_window(ui_man->dlg_manager3, "whelp");
+		return true;
+	case HOTKEY_A_PETSKILL_1:
+		struct ui_dialog *qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
+		if (!pw_dialog_is_shown(qbar)) {
+			return true;
+		}
+
+		pw_pet_quickbar_command_attack(qbar, (void *)0x926d38);
+		return true;
+	case HOTKEY_A_PETSKILL_2:
+	case HOTKEY_A_PETSKILL_3:
+	case HOTKEY_A_PETSKILL_4:
+	case HOTKEY_A_PETSKILL_5:
+	case HOTKEY_A_PETSKILL_6:
+	case HOTKEY_A_PETSKILL_7:
+	case HOTKEY_A_PETSKILL_8:
+	case HOTKEY_A_PETSKILL_9: {
+		struct ui_dialog *qbar;
+		struct ui_dialog_el *el;
+		char buf[16];
+
+		qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
+		if (!pw_dialog_is_shown(qbar)) {
+			return true;
+		}
+
+		snprintf(buf, sizeof(buf), "Skill_%d", keycode - HOTKEY_A_PETSKILL_1 + 1); /* 1+ */
+		el = pw_dialog_get_el(qbar, buf);
+		pw_pet_quickbar_command_skill(qbar, 0, 0, el);
+		return true;
+	}
+	case HOTKEY_A_PET_MODE_FOLLOW: {
+		struct ui_dialog *qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
+		if (!pw_dialog_is_shown(qbar)) {
+			return true;
+		}
+
+		pw_dialog_on_command(qbar, "follow");
+		return true;
+	}
+	case HOTKEY_A_PET_MODE_STOP: {
+		struct ui_dialog *qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
+		if (!pw_dialog_is_shown(qbar)) {
+			return true;
+		}
+
+		pw_dialog_on_command(qbar, "stop");
+		return true;
+	}
+	case HOTKEY_A_SKILLF_1_1:
+	case HOTKEY_A_SKILLF_1_2:
+	case HOTKEY_A_SKILLF_1_3:
+	case HOTKEY_A_SKILLF_1_4:
+	case HOTKEY_A_SKILLF_1_5:
+	case HOTKEY_A_SKILLF_1_6:
+	case HOTKEY_A_SKILLF_1_7:
+	case HOTKEY_A_SKILLF_1_8:
+		pw_quickbar_command_skill(4, action - HOTKEY_A_SKILLF_1_1);
+		return true;
+	case HOTKEY_A_CAMERA_MODE: {
+		struct ui_dialog *dialog;
+
+		if (is_repeat) {
+			break;
+		}
+
+		pw_queue_action(220, 0, 0, 0, 0, 0, 0);
+		dialog = pw_get_dialog(ui_man, "Win_Camera");
+		if (!pw_dialog_is_shown(dialog)) {
+			pw_dialog_show(dialog, true, false, true);
+		} else {
+			pw_dialog_show(dialog, false, false, false);
+		}
+
+		return true;
+	}
+	case HOTKEY_A_SELECT_MOB:
+		if (!is_repeat) {
+			select_closest_mob();
+		}
+		return true;
 	default:
 		break;
 	}
 
 	return false;
-
-	switch(event) {
-	case WM_CHAR:
-		switch (keycode) {
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-			case '8':
-			case '9':
-				pw_quickbar_command_skill(1, keycode - '1');
-				return true;
-			default:
-				break;
-		}
-		if (!is_repeat) {
-			switch (keycode) {
-				case '~':
-					d3d_console_toggle();
-					return true;
-				case 'x': {
-					pw_queue_action(0x125, 0, 0, 0, 0, 0, 0);
-					return true;
-				}
-				case 'm': {
-					dialog = get_open_world_map_dialog(ui_man);
-					if (dialog) {
-						pw_dialog_on_command(dialog, "IDCANCEL");
-					} else {
-						pw_open_map_window(ui_man->map_manager, "bigmap");
-					}
-					return true;
-				}
-				case 'c':
-					pw_open_character_window(ui_man->dlg_manager, "wcharacter");
-					return true;
-				case 'b':
-					pw_open_inventory_window(ui_man->dlg_manager, "winventory");
-					return true;
-				case 'r':
-					pw_open_skill_window(ui_man->dlg_manager, "wskill");
-					return true;
-				case 'q':
-					pw_open_quest_window(ui_man->dlg_manager, "quest");
-					return true;
-				case 'e':
-					pw_open_action_window(ui_man->dlg_manager2, "waction");
-					return true;
-				case 't':
-					pw_open_team_window(ui_man->dlg_manager2, "wteam");
-					return true;
-				case 'f':
-					pw_open_friend_window(ui_man->dlg_manager2, "wfriend");
-					return true;
-				case 'g':
-					pw_open_faction_window(ui_man->dlg_manager2, "wfaction");
-					return true;
-				case 'p':
-					pw_open_pet_window(ui_man->dlg_manager2, "wpet");
-					return true;
-				case 'l':
-					pw_open_help_window(ui_man->dlg_manager3, "whelp");
-					return true;
-				default:
-					break;
-				    }
-		}
-		break;
-	case WM_SYSCHAR:
-		switch (keycode) {
-			case '1': {
-				struct ui_dialog *qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
-				if (!pw_dialog_is_shown(qbar)) {
-					return true;
-				}
-
-				pw_pet_quickbar_command_attack(qbar, (void *)0x926d38);
-			}
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-			case '8':
-			case '9': {
-				struct ui_dialog *qbar;
-				struct ui_dialog_el *el;
-				char buf[16];
-
-				qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
-				if (!pw_dialog_is_shown(qbar)) {
-					return true;
-				}
-
-				snprintf(buf, sizeof(buf), "Skill_%d", keycode - '0'); /* 1+ */
-				el = pw_dialog_get_el(qbar, buf);
-				pw_pet_quickbar_command_skill(qbar, 0, 0, el);
-				return true;
-			}
-			case 'f': {
-				struct ui_dialog *qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
-				if (!pw_dialog_is_shown(qbar)) {
-					return true;
-				}
-
-				pw_dialog_on_command(qbar, "follow");
-				return true;
-			}
-			case 's': {
-				struct ui_dialog *qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
-				if (!pw_dialog_is_shown(qbar)) {
-					return true;
-				}
-
-				pw_dialog_on_command(qbar, "stop");
-				return true;
-			}
-			default:
-				break;
-		}
-
-	case WM_KEYDOWN:
-		switch (keycode) {
-			case VK_RETURN: {
-				struct ui_dialog *dialog;
-				struct ui_dialog_el *el;
-
-				if (is_repeat) {
-					break;
-				}
-
-				if (ui_man->focused_dialog && ui_man->focused_dialog->focused_el &&
-						ui_man->focused_dialog->focused_el->type == 4) {
-					/* text field focused */
-					break;
-				}
-
-				dialog = pw_get_dialog(ui_man, "Win_Chat");
-				el = pw_dialog_get_el(dialog, "DEFAULT_Txt_Speech");
-
-				pw_bring_dialog_to_front(ui_man, dialog);
-				((void __thiscall (*)(void *, bool)) el->fn_tbl[14])(el, 1);
-				pw_dialog_change_focus(dialog, el);
-
-				return true;
-			}
-			case VK_F1:
-			case VK_F2:
-			case VK_F3:
-			case VK_F4:
-			case VK_F5:
-			case VK_F6:
-			case VK_F7:
-			case VK_F8:
-				pw_quickbar_command_skill(4, keycode - VK_F1);
-				return true;
-			case VK_F9: {
-				struct ui_dialog *dialog;
-
-				if (is_repeat) {
-					break;
-				}
-
-				pw_queue_action(220, 0, 0, 0, 0, 0, 0);
-				dialog = pw_get_dialog(ui_man, "Win_Camera");
-				if (!pw_dialog_is_shown(dialog)) {
-					pw_dialog_show(dialog, true, false, true);
-				} else {
-					pw_dialog_show(dialog, false, false, false);
-				}
-
-				return true;
-			}
-			case 'g':
-			case 'G':
-			default:
-				break;
-		}
-		break;
-	default:
-		break;
-	}
-
-	if (get_open_world_map_dialog(ui_man)) {
-		return pw_on_keydown(ui_man, event, keycode, mods);
-	}
-
-	switch (event) {
-	case WM_KEYDOWN:
-		switch (keycode) {
-			case VK_TAB:
-				if (!is_repeat) {
-					select_closest_mob();
-				}
-				return true;
-			default:
-				break;
-		}
-		break;
-	default:
-		break;
-	}
-
-	bool rc = pw_on_keydown(ui_man, event, keycode, mods);
-	return rc;
 }
 
 TRAMPOLINE_FN(&pw_on_keydown, 7, hooked_pw_on_keydown);
