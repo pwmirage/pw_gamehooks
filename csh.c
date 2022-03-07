@@ -133,7 +133,7 @@ struct csh_cmd {
 static struct pw_avl *g_var_avl;
 static struct csh_cmd *g_cmds;
 static char g_profile[64];
-static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static bool g_static_init_done;
 
 static inline void
@@ -445,29 +445,40 @@ void *
 csh_get_ptr(const char *key)
 {
 	struct csh_var *var;
+	void *ret;
 
+	lock();
 	var = get_var(key);
 	if (!var) {
+		unlock();
 		return NULL;
 	}
 
 	switch (var->type) {
 		case CSH_T_STRING:
-			return var->s.buf;
+			ret = var->s.buf;
+			break;
 		case CSH_T_DYN_STRING:
-			return var->dyn_s;
+			ret = var->dyn_s;
+			break;
 		case CSH_T_INT:
-			return var->i;
+			ret = var->i;
+			break;
 		case CSH_T_BOOL:
-			return var->b;
+			ret = var->b;
+			break;
 		case CSH_T_DOUBLE:
-			return var->d;
+			ret = var->d;
+			break;
 		case CSH_T_NONE:
+			break;
+		default:
+			assert(false);
 			break;
 	}
 
-	assert(false);
-	return NULL;
+	unlock();
+	return ret;
 }
 
 static void
@@ -585,10 +596,13 @@ csh_cmd(const char *usercmd)
 	cmd = g_cmds;
 	while (cmd) {
 		if (cmd->prefix_hash == hash && strcmp(cmd->prefix, buf) == 0) {
+			const char *ret;
+
 			tmp = *cmd;
-			unlock();
 			snprintf(buf, sizeof(buf), "%s", usercmd + prefixlen);
-			return tmp.fn(cleanup_str(buf, " \t\r\n"), tmp.ctx);
+			ret = tmp.fn(cleanup_str(buf, " \t\r\n"), tmp.ctx);
+			unlock();
+			return ret;
 		}
 		cmd = cmd->next;
 	}
