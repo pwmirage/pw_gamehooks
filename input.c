@@ -35,11 +35,13 @@ struct hotkey {
 	int key;
 	union hotkey_mod_mask mods;
 	uint8_t action;
-	struct hotkey *next;
+	struct hotkey *next; /**< next in the g_hotkeys list */
+	struct hotkey *actions_next; /**< next in the g_actions list */
 };
 
-#define MAX_HOTKEYS 256
+#define MAX_HOTKEYS 0x10B
 static struct hotkey *g_hotkeys[MAX_HOTKEYS];
+static struct hotkey *g_actions[HOTKEY_A_MAX];
 
 const char *
 mg_input_action_to_str(int id)
@@ -130,7 +132,7 @@ mg_input_action_to_str(int id)
 	return "Unknown";
 }
 
-static const char *g_keynames[] = {
+static const char *g_keynames[MAX_HOTKEYS] = {
 	"Unknown 0x00",
 	"LMB",
 	"RMB",
@@ -586,7 +588,11 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 
 	keycode = mg_winevent_to_event(keycode, mods);
 	action = get_mapped_action(event, keycode);
-	pw_log("event=%x, keycode=%x, mods=%x => %d", event, keycode, mods, action);
+
+	if (event == WM_KEYDOWN || event == WM_SYSKEYDOWN) {
+		pw_log("event=0x%x (%s), mods=%x => 0x%x (%s)", keycode, mg_input_to_str(keycode),
+				mods, action, mg_input_action_to_str(action));
+	}
 	switch (action) {
 	case HOTKEY_A_GM_CONSOLE: {
 		struct ui_dialog *dialog = pw_get_dialog(ui_man, "Win_GMConsole");
@@ -602,6 +608,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 			ui_man->show_ui = !ui_man->show_ui;
 			g_disable_all_overlay = !ui_man->show_ui;
 		}
+		return true;
 	case HOTKEY_A_SKILL_1_1:
 	case HOTKEY_A_SKILL_1_2:
 	case HOTKEY_A_SKILL_1_3:
@@ -678,7 +685,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 	case HOTKEY_A_HELP:
 		pw_open_help_window(ui_man->dlg_manager3, "whelp");
 		return true;
-	case HOTKEY_A_PETSKILL_1:
+	case HOTKEY_A_PETSKILL_1: {
 		struct ui_dialog *qbar = g_pw_data->game->ui->ui_manager->pet_quickbar_dialog;
 		if (!pw_dialog_is_shown(qbar)) {
 			return true;
@@ -686,6 +693,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 
 		pw_pet_quickbar_command_attack(qbar, (void *)0x926d38);
 		return true;
+	}
 	case HOTKEY_A_PETSKILL_2:
 	case HOTKEY_A_PETSKILL_3:
 	case HOTKEY_A_PETSKILL_4:
@@ -781,18 +789,83 @@ PATCH_MEM(0x85fc10, 4, ".float 30");
 static void
 _set_key(struct hotkey hotkey_p)
 {
-	struct hotkey *h = calloc(1, sizeof(*h));
-	assert(h);
+	struct hotkey *h, **tmp;
+
+	h = g_hotkeys[hotkey_p.key];
+	while (h && h->mods.combined != hotkey_p.mods.combined) {
+		h = h->next;
+	}
+
+	if (!h) {
+		h = calloc(1, sizeof(*h));
+		assert(h);
+
+		memcpy(h, &hotkey_p, sizeof(*h));
+		h->next = g_hotkeys[h->key];
+		g_hotkeys[h->key] = h;
+
+		h->actions_next = g_actions[h->action];
+		g_actions[h->action] = h;
+
+		return;
+	}
+
+	tmp = &g_actions[h->action];
+	while (*tmp && ((*tmp)->key != h->key || (*tmp)->mods.combined != h->mods.combined)) {
+		tmp = &(*tmp)->actions_next;
+	}
+	assert(*tmp);
+
+	/* remove it, we'll re-add it elsewhere */
+	*tmp = (*tmp)->actions_next;
 
 	memcpy(h, &hotkey_p, sizeof(*h));
-	h->next = g_hotkeys[h->key];
-	g_hotkeys[h->key] = h;
+	h->actions_next = g_actions[h->action];
+	g_actions[h->action] = h;
+}
+
+int
+mg_input_get_action_hotkeys(int action, char *bufs, size_t maxbufs, size_t buflen)
+{
+	struct hotkey *h;
+	int bufno = 0;
+	int count = 0;
+
+	assert(maxbufs > 0);
+	assert(buflen > 0);
+
+	/* actions are always prepended to the list, so to return hotkeys
+	 * in the order they were inserted we need to first need to know
+	 * how many there are */
+	h = g_actions[action];
+	while (h) {
+		count++;
+		bufno++;
+		h = h->actions_next;
+	}
+
+	h = g_actions[action];
+	while (h) {
+		snprintf(bufs + buflen * --bufno, buflen,
+				"%s%s%s%s",
+				h->mods.ctrl ? "Ctrl + " : "",
+				h->mods.shift ? "Shift + " : "",
+				h->mods.alt ? "Alt + " : "",
+				mg_input_to_str(h->key));
+		h = h->actions_next;
+
+		if (bufno < 0) {
+			break;
+		}
+	}
+
+	return count;
 }
 
 static void __attribute__((constructor))
 init(void)
 {
-	_set_key((struct hotkey){ .key = 'g', .action = HOTKEY_A_GM_CONSOLE, .mods = { .ctrl = 1 }});
+	_set_key((struct hotkey){ .key = 'G', .action = HOTKEY_A_GM_CONSOLE, .mods = { .ctrl = 1 }});
 }
 
 /** strip preceeding and following quotes and whitespaces */
@@ -844,13 +917,16 @@ bind_cmd_handler(const char *val, void *ctx)
 	snprintf(buf, sizeof(buf), "%s", val);
 	rc = split_string_to_words(buf, words, &wordcnt);
 
-	if (rc != 0 || wordcnt != 2) {
+	if (rc == 0 && wordcnt == 1) {
+		words[1] = "";
+	} else if (rc != 0 || wordcnt != 2) {
 		return "^ff0000Usage: bind <hotkeys> <action>";
 	}
 
 	if (strstr(words[0], "Ctrl ")) {
 		mods.ctrl = 1;
 	}
+
 
 	if (strstr(words[0], "Shift ")) {
 		mods.shift = 1;
@@ -861,7 +937,9 @@ bind_cmd_handler(const char *val, void *ctx)
 	}
 
 	c = strrchr(words[0], '+');
-	if (!c) {
+	if (c) {
+		c = c + 1;
+	} else {
 		c = words[0];
 	}
 	c = cleanup_str(c, " ");
@@ -876,9 +954,13 @@ bind_cmd_handler(const char *val, void *ctx)
 		return res_buf;
 	}
 
-	for (action_id = 1; action_id < HOTKEY_A_MAX; action_id++) {
-		if (strcmp(words[1], mg_input_action_to_str(action_id)) == 0) {
-			break;
+	if (strcmp(words[1], "") == 0 || strcmp(words[1], "-") == 0) {
+		action_id = 0;
+	} else {
+		for (action_id = 0; action_id < HOTKEY_A_MAX; action_id++) {
+			if (strcmp(words[1], mg_input_action_to_str(action_id)) == 0) {
+				break;
+			}
 		}
 	}
 
@@ -887,7 +969,6 @@ bind_cmd_handler(const char *val, void *ctx)
 		return res_buf;
 	}
 
-	pw_log("setting \"%s\" to \"%d\"", words[0], hotkey_id);
 	_set_key((struct hotkey){ .key = hotkey_id, .action = action_id, .mods = mods });
 	return "";
 }

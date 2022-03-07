@@ -187,6 +187,9 @@ d3d_try_show_settings_win(void)
 				for (int row = 1; row < HOTKEY_A_MAX; row++) {
 					ImGui::TableNextRow();
 
+					char keys[2][64] = { "None", "None" };
+					mg_input_get_action_hotkeys(row, keys[0], sizeof(keys) / sizeof(keys[0]), sizeof(keys[0]));
+
 					ImGui::TableNextColumn();
 					const char *str = mg_input_action_to_str(row);
 					ImGui::SetCursorPosX(ImGui::GetCursorPosX()
@@ -196,14 +199,14 @@ d3d_try_show_settings_win(void)
 					ImGui::Text(str);
 					ImGui::TableNextColumn();
 					ImGui::PushID(row * 2);
-					if (ImGui::Button("None", ImVec2(-FLT_MIN, 0.0f))) {
+					if (ImGui::Button(keys[0], ImVec2(-FLT_MIN, 0.0f))) {
 						clicked_action_id = row;
 						clicked_button_no = 0;
 					}
 					ImGui::PopID();
 					ImGui::TableNextColumn();
 					ImGui::PushID(row * 2 + 1);
-					if (ImGui::Button("None", ImVec2(ImGui::GetWindowContentRegionMin().x - 10, 0.0f))) {
+					if (ImGui::Button(keys[1], ImVec2(ImGui::GetWindowContentRegionMin().x - 10, 0.0f))) {
 						clicked_action_id = row;
 						clicked_button_no = 1;
 					}
@@ -304,6 +307,15 @@ d3d_try_show_settings_win(void)
 
 		if (ImGui::Button("OK", ImVec2(140, 0))) {
 			if (!g_setting_action_key.listening) {
+				char prevkey[2][64];
+
+				/* unbind previous hotkey */
+				int rc = mg_input_get_action_hotkeys(g_setting_action_id, prevkey[0], 2, sizeof(prevkey[0]));
+				if (rc > clicked_button_no) {
+					csh_cmdf("bind \"%s\" \"\"", prevkey[clicked_button_no]);
+				}
+
+				/* bind the new one */
 				csh_cmdf("bind \"%s\" \"%s\"", g_setting_action_key.str,
 						mg_input_action_to_str(g_setting_action_id));
 			}
