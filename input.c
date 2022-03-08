@@ -1000,6 +1000,7 @@ CSH_REGISTER_RESET_FN()(void)
 
 	for (i = 0; i < HOTKEY_A_MAX; i++) {
 		h = g_actions[i];
+		g_actions[i] = NULL;
 		while (h) {
 			tmp = h->actions_next;
 			snprint_hotkey(buf, sizeof(buf), h);
@@ -1008,4 +1009,6 @@ CSH_REGISTER_RESET_FN()(void)
 			h = tmp;
 		}
 	}
+
+	memset(g_hotkeys, 0, sizeof(g_hotkeys));
 }
