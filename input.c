@@ -713,7 +713,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 			return true;
 		}
 
-		snprintf(buf, sizeof(buf), "Skill_%d", keycode - HOTKEY_A_PETSKILL_1 + 1); /* 1+ */
+		snprintf(buf, sizeof(buf), "Skill_%d", action - HOTKEY_A_PETSKILL_2 + 2); /* 2+ */
 		el = pw_dialog_get_el(qbar, buf);
 		pw_pet_quickbar_command_skill(qbar, 0, 0, el);
 		return true;
