@@ -263,6 +263,11 @@ config_flush(void)
 	bool do_indent = false;
 	int rc;
 
+	if (!g_csh_cfg.intrnl->cached) {
+		/* nothing to flush */
+		return 0;
+	}
+
 	rc = read_file_for_updating();
 	if (rc == -ENOENT) {
 		rc = write_new();

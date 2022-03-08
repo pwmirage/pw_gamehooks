@@ -84,8 +84,8 @@ write_new(void)
     GC_W("\tset r_height 1040");
     GC_W("\tset r_fullscreen 1");
     GC_W("\tset r_borderless 1");
-
     GC_W("fi");
+    GC_W("");
     #undef GC_W
 
 	fclose(fp);
@@ -122,6 +122,7 @@ struct csh_var {
 		double d;
 	} def_val;
 	bool initialized;
+	bool modified;
 };
 
 struct csh_cmd {
@@ -248,6 +249,8 @@ set_var_val(struct csh_var *var, const char *val)
 			*var->d = strtod(val, NULL);
 			break;
 	}
+
+	var->modified = true;
 }
 
 int
@@ -505,6 +508,10 @@ save_var_foreach_cb(void *el, void *ctx1, void *ctx2)
 	struct csh_var *var = (void *)node->data;
 	char keybuf[128];
 	const char *val;
+
+	if (!var->modified) {
+		return;
+	}
 
 	snprintf(keybuf, sizeof(keybuf), "set %s", var->key);
 	val = csh_get(var->key);
