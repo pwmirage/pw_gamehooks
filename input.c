@@ -112,7 +112,6 @@ mg_input_action_to_str(int id)
 	case HOTKEY_A_PET_MODE_FOLLOW: return "Set Pet Follow Mode";
 	case HOTKEY_A_PET_MODE_STOP: return "Set Pet Stop Mode";
 	case HOTKEY_A_HIDEUI: return "Toggle Hide UI";
-	case HOTKEY_A_CONSOLE: return "Show/hide console";
 	case HOTKEY_A_ROLL: return "Make a roll";
 	case HOTKEY_A_MAP: return "Show/hide map";
 	case HOTKEY_A_CHARACTER: return "Show/hide character window";
@@ -776,6 +775,14 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 }
 
 TRAMPOLINE_FN(&pw_on_keydown, 7, hooked_pw_on_keydown);
+
+/* call hooked_pw_on_keydown() for keydown and syskeydown, not char and syschar */
+PATCH_MEM(0x54f880, 24,
+	"cmp ebx, 0x%x;"
+	"jz 0x54f8f7;"
+	"cmp ebx, 0x%x;"
+	"jz 0x54f8f7;"
+	"jmp 0x54f898;", WM_KEYDOWN, WM_SYSKEYDOWN);
 
 /* disable hardcoded camera mode on F9 */
 PATCH_MEM(0x4021c4, 5, "jmp 0x4021dc");
