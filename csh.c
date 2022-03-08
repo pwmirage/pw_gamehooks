@@ -40,7 +40,7 @@ write_new(void)
 	int i, rc = 0;
 
 	assert(g_csh_cfg.filename[0] != 0);
-	fp = fopen(g_csh_cfg.filename, "w");
+	fp = fopen(g_csh_cfg.filename, "wb");
 	if (!fp) {
 		return -errno;
 	}
@@ -65,24 +65,26 @@ write_new(void)
 	GC_W("# may be updated, or new overriding rules might be added to the end of file.");
 	GC_W("");
     GC_W("set d3d8 0");
-    GC_W("set render_nofocus 1");
-    GC_W("set show_mp_bar 0");
-    GC_W("set show_hp_bar 0");
+    GC_W("set r_render_nofocus 1");
+    GC_W("set r_head_hp_bar 0");
+    GC_W("set r_head_mp_bar 0");
     GC_W("");
     GC_W("if [ \"$PROFILE\" == \"Secondary\" ]; then");
-    GC_W("\tset x 10");
-    GC_W("\tset y 10");
-    GC_W("\tset width 1297");
-    GC_W("\tset height 731");
-    GC_W("\tset fullscreen 0");
+    GC_W("\tset r_x 10");
+    GC_W("\tset r_y 10");
+    GC_W("\tset r_width 1297");
+    GC_W("\tset r_height 731");
+    GC_W("\tset r_fullscreen 0");
     GC_W("fi");
     GC_W("");
     GC_W("if [ \"$PROFILE\" == \"Tertiary\" ]; then");
-    GC_W("\tset x 960");
-    GC_W("\tset y 0");
-    GC_W("\tset width 960");
-    GC_W("\tset height 1040");
-    GC_W("\tset fullscreen 1");
+    GC_W("\tset r_x 960");
+    GC_W("\tset r_y 0");
+    GC_W("\tset r_width 960");
+    GC_W("\tset r_height 1040");
+    GC_W("\tset r_fullscreen 1");
+    GC_W("\tset r_borderless 1");
+
     GC_W("fi");
     #undef GC_W
 
@@ -514,6 +516,10 @@ csh_save(const char *file)
 {
 	lock();
 	snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "%s", file);
+
+	if (access(g_csh_cfg.filename, F_OK) != 0) {
+		write_new();
+	}
 
 	pw_avl_foreach(g_var_avl, save_var_foreach_cb, NULL, NULL);
 

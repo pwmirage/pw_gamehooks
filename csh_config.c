@@ -85,7 +85,7 @@ csh_cfg_parse(csh_cfg_fn fn, void *fn_ctx)
 
 	assert(g_csh_cfg.filename[0] != 0);
 
-	fp = fopen(g_csh_cfg.filename, "r");
+	fp = fopen(g_csh_cfg.filename, "rb");
 	if (!fp) {
 		return -errno;
 	}
@@ -134,7 +134,7 @@ read_file_for_updating(void)
 	char *buf;
 	bool do_skip = false;
 
-	fp = fopen(g_csh_cfg.filename, "r");
+	fp = fopen(g_csh_cfg.filename, "rb");
 	if (!fp) {
 		return -errno;
 	}
@@ -246,7 +246,7 @@ write_new(void)
 	int i, rc = 0;
 
 	assert(g_csh_cfg.filename[0] != 0);
-	fp = fopen(g_csh_cfg.filename, "w");
+	fp = fopen(g_csh_cfg.filename, "wb");
 	if (!fp) {
 		return -errno;
 	}
@@ -286,7 +286,7 @@ config_flush(void)
 	}
 	g_csh_cfg.intrnl->cached = NULL;
 
-	fp = fopen(g_csh_cfg.filename, "w");
+	fp = fopen(g_csh_cfg.filename, "wb");
 	if (!fp) {
 		return -errno;
 	}
