@@ -313,15 +313,15 @@ d3d_try_show_settings_win(void)
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3);
 
 		if (ImGui::Button("OK", ImVec2(140, 0))) {
+			char prevkey[2][64];
+
+			/* unbind previous hotkey */
+			int rc = mg_input_get_action_hotkeys(g_setting_action_id, prevkey[0], 2, sizeof(prevkey[0]));
+			if (rc > clicked_button_no) {
+				csh_cmdf("bind \"%s\" \"\"", prevkey[clicked_button_no]);
+			}
+
 			if (!g_setting_action_key.listening) {
-				char prevkey[2][64];
-
-				/* unbind previous hotkey */
-				int rc = mg_input_get_action_hotkeys(g_setting_action_id, prevkey[0], 2, sizeof(prevkey[0]));
-				if (rc > clicked_button_no) {
-					csh_cmdf("bind \"%s\" \"\"", prevkey[clicked_button_no]);
-				}
-
 				/* bind the new one */
 				csh_cmdf("bind \"%s\" \"%s\"", g_setting_action_key.str,
 						mg_input_action_to_str(g_setting_action_id));
