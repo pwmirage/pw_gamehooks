@@ -20,6 +20,7 @@
 #include "common.h"
 #include "d3d.h"
 #include "csh.h"
+#include "csh_config.h"
 
 union hotkey_mod_mask {
 	struct {
@@ -825,6 +826,17 @@ _set_key(struct hotkey hotkey_p)
 	g_actions[h->action] = h;
 }
 
+static int
+snprint_hotkey(char *buf, size_t buflen, struct hotkey *h)
+{
+	return snprintf(buf, buflen,
+				"%s%s%s%s",
+				h->mods.ctrl ? "Ctrl + " : "",
+				h->mods.shift ? "Shift + " : "",
+				h->mods.alt ? "Alt + " : "",
+				mg_input_to_str(h->key));
+}
+
 int
 mg_input_get_action_hotkeys(int action, char *bufs, size_t maxbufs, size_t buflen)
 {
@@ -847,12 +859,7 @@ mg_input_get_action_hotkeys(int action, char *bufs, size_t maxbufs, size_t bufle
 
 	h = g_actions[action];
 	while (h) {
-		snprintf(bufs + buflen * --bufno, buflen,
-				"%s%s%s%s",
-				h->mods.ctrl ? "Ctrl + " : "",
-				h->mods.shift ? "Shift + " : "",
-				h->mods.alt ? "Alt + " : "",
-				mg_input_to_str(h->key));
+		snprint_hotkey(bufs + buflen * --bufno, buflen, h);
 		h = h->actions_next;
 
 		if (bufno < 0) {
@@ -861,12 +868,6 @@ mg_input_get_action_hotkeys(int action, char *bufs, size_t maxbufs, size_t bufle
 	}
 
 	return count;
-}
-
-static void __attribute__((constructor))
-init(void)
-{
-	_set_key((struct hotkey){ .key = 'G', .action = HOTKEY_A_GM_CONSOLE, .mods = { .ctrl = 1 }});
 }
 
 /** strip preceeding and following quotes and whitespaces */
@@ -903,16 +904,16 @@ cleanup_str(char *str, const char *chars_to_remove)
 	return str;
 }
 
-static const char *
-bind_cmd_handler(const char *val, void *ctx)
+CSH_REGISTER_CMD("bind")(const char *val, void *ctx)
 {
 	static char res_buf[168];
-	char buf[128];
+	char buf[128], tmpbuf[64];
 	char *c;
 	char *words[3];
 	int wordcnt = sizeof(words) / sizeof(words[0]);
 	int hotkey_id, action_id;
 	union hotkey_mod_mask mods = {0};
+	struct hotkey h = {};
 	int rc;
 
 	snprintf(buf, sizeof(buf), "%s", val);
@@ -928,7 +929,6 @@ bind_cmd_handler(const char *val, void *ctx)
 		mods.ctrl = 1;
 	}
 
-
 	if (strstr(words[0], "Shift ")) {
 		mods.shift = 1;
 	}
@@ -943,7 +943,8 @@ bind_cmd_handler(const char *val, void *ctx)
 	} else {
 		c = words[0];
 	}
-	c = cleanup_str(c, " ");
+	snprintf(tmpbuf, sizeof(tmpbuf), "%s", c);
+	c = cleanup_str(tmpbuf, " ");
 	for (hotkey_id = 0; hotkey_id < sizeof(g_keynames) / sizeof(g_keynames[0]); hotkey_id++) {
 		if (strcmp(c, g_keynames[hotkey_id]) == 0) {
 			break;
@@ -970,8 +971,34 @@ bind_cmd_handler(const char *val, void *ctx)
 		return res_buf;
 	}
 
-	_set_key((struct hotkey){ .key = hotkey_id, .action = action_id, .mods = mods });
+	h.key = hotkey_id;
+	h.action = action_id;
+	h.mods = mods;
+	_set_key(h);
+
+	char hotkey_buf[64];
+	char bind_buf[128], val_buf[128];
+	snprint_hotkey(hotkey_buf, sizeof(hotkey_buf), &h);
+	snprintf(bind_buf, sizeof(bind_buf), "bind \"%s\"", hotkey_buf);
+	snprintf(val_buf, sizeof(val_buf), "\"%s\"", words[1]);
+	csh_cfg_save_s(bind_buf, val_buf, false);
 	return "";
 }
 
-CSH_REGISTER_CMD("bind", bind_cmd_handler);
+CSH_REGISTER_RESET_FN()(void)
+{
+	int i;
+	struct hotkey *h, *tmp;
+	char buf[128];
+
+	for (i = 0; i < HOTKEY_A_MAX; i++) {
+		h = g_actions[i];
+		while (h) {
+			tmp = h->actions_next;
+			snprint_hotkey(buf, sizeof(buf), h);
+			csh_cfg_remove(buf, false);
+			free(h);
+			h = tmp;
+		}
+	}
+}

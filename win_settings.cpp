@@ -17,6 +17,7 @@
 #include "common.h"
 #include "d3d.h"
 #include "csh.h"
+#include "csh_config.h"
 #include "icons_fontawesome.h"
 #include "input.h"
 #include "pw_api.h"
@@ -145,7 +146,12 @@ d3d_try_show_settings_win(void)
 
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGui::Checkbox("Save window position to cfg", &save_pos_to_cfg);
+				if (ImGui::Checkbox("Save window position to cfg", &save_pos_to_cfg)) {
+					if (save_pos_to_cfg) {
+						csh_var_set_modified("r_x", save_pos_to_cfg);
+						csh_var_set_modified("r_y", save_pos_to_cfg);
+					}
+				}
 				ImGui::SameLine();
 				d3d_show_help_marker(
 						"Window position doesn't get saved by default for extra convenience.");
@@ -224,9 +230,9 @@ d3d_try_show_settings_win(void)
 	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3);
 
 	if (ImGui::Button("Save", {80, 22})) {
-		if (save_pos_to_cfg) {
-			csh_set_i("r_x", csh_get_i("_shadow_r_x"));
-			csh_set_i("r_y", csh_get_i("_shadow_r_y"));
+		if (!save_pos_to_cfg) {
+			csh_var_set_modified("r_x", false);
+			csh_var_set_modified("r_y", false);
 		}
 		csh_save("..\\patcher\\game.cfg");
 		//g_settings_show = false;
@@ -235,6 +241,7 @@ d3d_try_show_settings_win(void)
 	ImGui::SameLine();
 
 	if (ImGui::Button("Revert", {80, 22})) {
+		csh_init(NULL);
 		//g_settings_show = false;
 	}
 

@@ -12,6 +12,12 @@
 extern "C" {
 #endif
 
+#ifdef DLLEXPORT
+#define APICALL __declspec(dllexport)
+#else
+#define APICALL __declspec(dllimport)
+#endif
+
 typedef void (*csh_cfg_fn)(const char *cmd, void *ctx);
 
 struct csh_cfg_internal;
@@ -28,7 +34,7 @@ extern struct csh_cfg {
  *
  * \return 0 on success, errno otherwise
  */
-int csh_cfg_parse(csh_cfg_fn fn, void *fn_ctx);
+APICALL int csh_cfg_parse(csh_cfg_fn fn, void *fn_ctx);
 
 /**
  * Try to open the config file, locate a setting with the same key,
@@ -36,9 +42,12 @@ int csh_cfg_parse(csh_cfg_fn fn, void *fn_ctx);
  * is false, the new value is just kept in memory, awaiting for further
  * calls of this function.
  */
-int csh_cfg_save_s(const char *key, const char *val, bool flush);
-int csh_cfg_save_i(const char *key, int64_t val, bool flush);
-int csh_cfg_save_f(const char *key, float val, bool flush);
+APICALL int csh_cfg_save_s(const char *key, const char *val, bool flush);
+APICALL int csh_cfg_save_i(const char *key, int64_t val, bool flush);
+APICALL int csh_cfg_save_f(const char *key, float val, bool flush);
+
+/** Remove a pending, not flushed save if it exists */
+APICALL int csh_cfg_remove(const char *key, bool flush);
 
 #ifdef __cplusplus
 }

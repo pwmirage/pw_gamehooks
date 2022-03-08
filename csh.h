@@ -33,7 +33,6 @@ extern "C" {
  * profile <profilename>
  *
  * TODO:
- * reload_cfg
  * unset
  * dump_cfg
  *
@@ -42,6 +41,7 @@ extern "C" {
 
 typedef const char *(*csh_cmd_handler_fn)(const char *val, void *ctx);
 typedef void (*csh_set_cb_fn)(void);
+typedef void (*csh_reset_cb_fn)(void);
 
 /** Load csh_config from given file, execute commands inside. */
 APICALL int csh_init(const char *file);
@@ -90,6 +90,14 @@ APICALL double csh_get_f(const char *key);
 APICALL bool csh_get_b(const char *key);
 /** Get pointer to the backing variable */
 APICALL void *csh_get_ptr(const char *key);
+/** Set variable as modified. Modified variables will be saved into the cfg. */
+APICALL void csh_var_set_modified(const char *key, bool is_modified);
+
+/**
+ * Register fn to be called on csh reset, e.g. `reset` command or subsequent
+ * csh_init() calls.
+ */
+APICALL void csh_register_reset_cb(csh_reset_cb_fn fn);
 
 /**
  * Register custom handler for commands starting with `prefix`.
@@ -213,13 +221,13 @@ CSH_UNIQUENAME(init_csh_register_var_fn)(void) \
 
 /** Statically register a cmd handler */
 #define _CSH_REGISTER_CMD_INLINE(name_p) \
-static void CSH_UNIQUENAME(init_csh_register_cmd_fn)(void); \
+static const char * CSH_UNIQUENAME(init_csh_register_cmd_cb_fn)(); \
 static void __attribute__((constructor (104))) \
 CSH_UNIQUENAME(init_csh_register_cmd_fn)(void) \
 { \
-    csh_register_cmd(name_p, CSH_UNIQUENAME(init_csh_register_cmd_fn), NULL); \
+    csh_register_cmd(name_p, CSH_UNIQUENAME(init_csh_register_cmd_cb_fn), NULL); \
 } \
-static void CSH_UNIQUENAME(init_csh_register_cmd_fn)
+static const char * CSH_UNIQUENAME(init_csh_register_cmd_cb_fn)
 
 #define _CSH_REGISTER_CMD(name_p, cb_fn_p) \
 static void __attribute__((constructor (104))) \
@@ -228,19 +236,35 @@ CSH_UNIQUENAME(init_csh_register_cmd_fn)(void) \
     csh_register_cmd(name_p, cb_fn_p, NULL); \
 }
 
-#define _CSH_REGISTER_VAR_CALLBACK_CHOOSER(...) \
-    GET_3RD_ARG(__VA_ARGS__, _CSH_REGISTER_VAR_CALLBACK, _CSH_REGISTER_VAR_CALLBACK_INLINE, )
+#define _CSH_REGISTER_CMD_CHOOSER(...) \
+    GET_3RD_ARG(__VA_ARGS__, _CSH_REGISTER_CMD, _CSH_REGISTER_CMD_INLINE, )
 
-#define CSH_REGISTER_VAR_CALLBACK(...) \
-    _CSH_REGISTER_VAR_CALLBACK_CHOOSER(__VA_ARGS__)(__VA_ARGS__)
+#define CSH_REGISTER_CMD(...) \
+    _CSH_REGISTER_CMD_CHOOSER(__VA_ARGS__)(__VA_ARGS__)
 
 
-#define CSH_REGISTER_CMD(prefix, cmd) \
-static void __attribute__((constructor (106))) \
-CSH_UNIQUENAME(init_csh_register_cmd_fn)(void) \
+/** Statically register a reset callback */
+#define _CSH_REGISTER_RESET_FN_INLINE() \
+static void CSH_UNIQUENAME(init_csh_register_reset_cb_fn)(void); \
+static void __attribute__((constructor (104))) \
+CSH_UNIQUENAME(init_csh_register_reset_fn)(void) \
 { \
-    csh_register_cmd(prefix, cmd, NULL); \
+    csh_register_reset_cb(CSH_UNIQUENAME(init_csh_register_reset_cb_fn)); \
+} \
+static void CSH_UNIQUENAME(init_csh_register_reset_cb_fn)
+
+#define _CSH_REGISTER_RESET_FN(cb_fn_p) \
+static void __attribute__((constructor (104))) \
+CSH_UNIQUENAME(init_csh_register_reset_fn)(void) \
+{ \
+    csh_register_reset_cb(cb_fn_p); \
 }
+
+#define _CSH_REGISTER_RESET_FN_CHOOSER(...) \
+    GET_3RD_ARG(__VA_ARGS__, _CSH_REGISTER_RESET_FN, _CSH_REGISTER_RESET_FN_INLINE, )
+
+#define CSH_REGISTER_RESET_FN(...) \
+    _CSH_REGISTER_RESET_FN_CHOOSER(__VA_ARGS__)(__VA_ARGS__)
 
 #ifdef __cplusplus
 }

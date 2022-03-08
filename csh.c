@@ -101,6 +101,14 @@ enum csh_var_type {
 	CSH_T_DOUBLE,
 };
 
+union csh_var_val {
+	const char *s;
+	int i;
+	bool b;
+	double d;
+	unsigned h;
+};
+
 struct csh_var {
 	char key[64];
 	enum csh_var_type type;
@@ -115,14 +123,9 @@ struct csh_var {
 		double *d;
 	};
 	csh_set_cb_fn cb_fn;
-	union {
-		const char *s;
-		int i;
-		bool b;
-		double d;
-	} def_val;
+	union csh_var_val def_val;
+	union csh_var_val saved_val;
 	bool initialized;
-	bool modified;
 };
 
 struct csh_cmd {
@@ -133,10 +136,16 @@ struct csh_cmd {
 	struct csh_cmd *next;
 };
 
+struct reset_fn_ctx {
+	csh_reset_cb_fn fn;
+	struct reset_fn_ctx *next;
+};
+
 static struct pw_avl *g_var_avl;
 static struct csh_cmd *g_cmds;
 static char g_profile[64];
 static pthread_mutex_t g_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static struct reset_fn_ctx *g_reset_fns;
 static bool g_static_init_done;
 
 static inline void
@@ -199,6 +208,13 @@ cmd_show_var_fn(const char *key, void *ctx)
 }
 
 static const char *
+cmd_reset_cfg_fn(const char *key, void *ctx)
+{
+	csh_init(g_csh_cfg.filename);
+	return "";
+}
+
+static const char *
 cmd_set_var_fn(const char *cmd, void *ctx)
 {
 	char key[64];
@@ -249,8 +265,37 @@ set_var_val(struct csh_var *var, const char *val)
 			*var->d = strtod(val, NULL);
 			break;
 	}
+}
 
-	var->modified = true;
+static void
+reset_var_val(struct csh_var *var)
+{
+	switch (var->type) {
+		case CSH_T_NONE:
+			assert(false);
+			break;
+		case CSH_T_STRING:
+			if (var->def_val.s) {
+				snprintf(var->s.buf, var->s.len, "%s", var->def_val.s);
+			}
+			break;
+		case CSH_T_DYN_STRING:
+			free(*var->dyn_s);
+			if (var->def_val.s) {
+				*var->dyn_s = strdup(var->def_val.s);
+			}
+			assert(*var->dyn_s);
+			break;
+		case CSH_T_INT:
+			*var->i = var->def_val.i;
+			break;
+		case CSH_T_BOOL:
+			*var->b = var->def_val.b;
+			break;
+		case CSH_T_DOUBLE:
+			*var->d = var->def_val.d;
+			break;
+	}
 }
 
 int
@@ -487,17 +532,118 @@ csh_get_ptr(const char *key)
 }
 
 static void
+var_reset(struct csh_var *var, bool is_modified)
+{
+	if (is_modified) {
+		/* change it */
+		var->saved_val.h += 1;
+		return;
+	}
+
+	switch (var->type) {
+		case CSH_T_NONE:
+			assert(false);
+			break;
+		case CSH_T_INT:
+			var->saved_val.i = *var->i;
+			break;
+		case CSH_T_BOOL:
+			var->saved_val.i = *var->b;
+			break;
+		case CSH_T_DOUBLE:
+			var->saved_val.d = *var->d;
+			break;
+		case CSH_T_STRING: {
+			uint32_t cur_hash = djb2(var->s.buf);
+			var->saved_val.h = cur_hash;
+			break;
+		}
+		case CSH_T_DYN_STRING: {
+			uint32_t cur_hash = djb2(*var->dyn_s);
+			var->saved_val.h = cur_hash;
+			break;
+		}
+	}
+}
+
+void
+csh_var_set_modified(const char *key, bool is_modified)
+{
+	struct csh_var *var;
+	void *ret;
+
+	lock();
+	var = get_var(key);
+	if (var) {
+		var_reset(var, is_modified);
+	}
+	unlock();
+}
+
+void
+csh_register_reset_cb(csh_reset_cb_fn fn)
+{
+	struct reset_fn_ctx *ctx = calloc(1, sizeof(*ctx));
+
+	assert(ctx);
+	ctx->fn = fn;
+	ctx->next = g_reset_fns;
+	g_reset_fns = ctx;
+}
+
+static void
 cfg_parse_fn(const char *cmd, void *ctx)
 {
 	csh_cmd(cmd);
 }
 
+static void
+init_var_clean_cb(void *el, void *ctx1, void *ctx2)
+{
+	struct pw_avl_node *node = el;
+	struct csh_var *var = (void *)node->data;
+
+	reset_var_val(var);
+}
+
+static void
+init_var_set_saved_cb(void *el, void *ctx1, void *ctx2)
+{
+	struct pw_avl_node *node = el;
+	struct csh_var *var = (void *)node->data;
+
+	var_reset(var, false);
+}
+
 int
 csh_init(const char *file)
 {
-	snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "%s", file);
+	struct reset_fn_ctx *reset_ctx;
+
+	lock();
+	if (g_static_init_done) {
+		reset_ctx = g_reset_fns;
+		while (reset_ctx) {
+			reset_ctx->fn();
+			reset_ctx = reset_ctx->next;
+		}
+	}
+
+	if (g_csh_cfg.filename[0] == 0) {
+		/* not every variable can be re-read from the config, so reset everything first */
+		pw_avl_foreach(g_var_avl, init_var_clean_cb, NULL, NULL);
+	}
+
+	if (file) {
+		snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "%s", file);
+	}
 
 	csh_cfg_parse(cfg_parse_fn, NULL);
+
+	/* make sure vars don't get saved until they're modified from now on */
+	pw_avl_foreach(g_var_avl, init_var_set_saved_cb, NULL, NULL);
+
+	unlock();
 	return 0;
 }
 
@@ -509,8 +655,38 @@ save_var_foreach_cb(void *el, void *ctx1, void *ctx2)
 	char keybuf[128];
 	const char *val;
 
-	if (!var->modified) {
+	if (var->key[0] == '_') {
 		return;
+	}
+
+	switch (var->type) {
+		case CSH_T_NONE:
+			assert(false);
+			break;
+		case CSH_T_INT:
+			if (var->saved_val.i == *var->i) return;
+			var->saved_val.i = *var->i;
+			break;
+		case CSH_T_BOOL:
+			if (var->saved_val.i == *var->b) return;
+			var->saved_val.i = *var->b;
+			break;
+		case CSH_T_DOUBLE:
+			if (var->saved_val.d == *var->d) return;
+			var->saved_val.d = *var->d;
+			break;
+		case CSH_T_STRING: {
+			uint32_t cur_hash = djb2(var->s.buf);
+			if (var->saved_val.h == cur_hash) return;
+			var->saved_val.h = cur_hash;
+			break;
+		}
+		case CSH_T_DYN_STRING: {
+			uint32_t cur_hash = djb2(*var->dyn_s);
+			if (var->saved_val.h == cur_hash) return;
+			var->saved_val.h = cur_hash;
+			break;
+		}
 	}
 
 	snprintf(keybuf, sizeof(keybuf), "set %s", var->key);
@@ -682,31 +858,7 @@ csh_register_var(const char *key, struct csh_var tmpvar)
 	memcpy(var, &tmpvar, sizeof(*var));
 	snprintf(var->key, sizeof(var->key), "%s", key);
 
-	switch (var->type) {
-		case CSH_T_NONE:
-			assert(false);
-			break;
-		case CSH_T_STRING:
-			if (var->def_val.s) {
-				snprintf(var->s.buf, var->s.len, "%s", var->def_val.s);
-			}
-			break;
-		case CSH_T_DYN_STRING:
-			if (var->def_val.s) {
-				*var->dyn_s = strdup(var->def_val.s);
-			}
-			assert(*var->dyn_s);
-			break;
-		case CSH_T_INT:
-			*var->i = var->def_val.i;
-			break;
-		case CSH_T_BOOL:
-			*var->b = var->def_val.b;
-			break;
-		case CSH_T_DOUBLE:
-			*var->d = var->def_val.d;
-			break;
-	}
+	reset_var_val(var);
 
 	var->initialized = true;
 	pw_avl_insert(g_var_avl, hash, var);
@@ -782,6 +934,7 @@ void
 csh_static_preinit(void)
 {
 	struct csh_cmd *cmd, *tmp;
+	struct reset_fn_ctx *reset_ctx, *reset_tmp;
 
 	g_static_init_done = false;
 
@@ -793,6 +946,14 @@ csh_static_preinit(void)
 	}
 	g_cmds = NULL;
 
+	reset_ctx = g_reset_fns;
+	while (reset_ctx) {
+		reset_tmp = reset_ctx->next;
+		free(reset_ctx);
+		reset_ctx = reset_tmp;
+	}
+	g_reset_fns = NULL;
+
 	if (g_var_avl) {
 		pw_avl_foreach(g_var_avl, static_preinit_foreach_var_cb, NULL, NULL);
 	} else {
@@ -803,6 +964,7 @@ csh_static_preinit(void)
 	csh_register_cmd("profile", cmd_profile_fn, NULL);
 	csh_register_cmd("set", cmd_set_var_fn, NULL);
 	csh_register_cmd("show", cmd_show_var_fn, NULL);
+	csh_register_cmd("reload_cfg", cmd_reset_cfg_fn, NULL);
 }
 
 void

@@ -314,7 +314,6 @@ config_flush(void)
 		line = line->next;
 	}
 
-
 	fclose(fp);
 	free_file_for_updating();
 	return 0;
@@ -323,7 +322,6 @@ config_flush(void)
 int
 csh_cfg_save_s(const char *key, const char *val, bool flush)
 {
-	FILE *fp;
 	struct cached_field **last_p = &g_csh_cfg.intrnl->cached;
 	struct cached_field *cache;
 
@@ -379,6 +377,31 @@ csh_cfg_save_f(const char *key, float val, bool flush)
 	snprintf(buf, sizeof(buf), "%.6f", val);
 
 	return csh_cfg_save_s(key, buf, flush);
+}
+
+int
+csh_cfg_remove(const char *key, bool flush)
+{
+	struct cached_field **last_p = &g_csh_cfg.intrnl->cached;
+	struct cached_field *cache;
+
+	cache = *last_p;
+	while (cache) {
+		if (strcmp(cache->key, key) == 0) {
+			/* remove */
+			*last_p = cache->next;
+			free(cache);
+			break;
+		}
+		last_p = &cache->next;
+		cache = *last_p;
+	}
+
+	if (!flush) {
+		return 0;
+	}
+
+	return config_flush();
 }
 
 #ifdef CSH_CONFIG_TEST

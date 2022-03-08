@@ -659,6 +659,9 @@ window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 	*mem_region_get_i32("_shadow_r_width") = w;
 	*mem_region_get_i32("_shadow_r_height") = h;
 
+	csh_var_set_modified("r_x", false);
+	csh_var_set_modified("r_y", false);
+
 	/* used by PW */
 	*(HINSTANCE *)0x927f5c = hinstance;
 	*(HWND *)(uintptr_t)0x927f60 = g_window;

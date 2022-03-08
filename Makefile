@@ -21,6 +21,7 @@ build/libgamehook.dll: $(LIB_OBJECTS:%.o=build/%.o)
 build/extlib.o: CFLAGS := -DDLLEXPORT=1 $(CFLAGS)
 build/crash_handler.o: CFLAGS := -DDLLEXPORT=1 $(CFLAGS)
 build/csh.o: CFLAGS := -DDLLEXPORT=1 $(CFLAGS)
+build/csh_config.o: CFLAGS := -DDLLEXPORT=1 $(CFLAGS)
 
 build/%.o: %.c
 	gcc $(CFLAGS) -c -o $@ $<
