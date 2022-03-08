@@ -501,27 +501,12 @@ save_var_foreach_cb(void *el, void *ctx1, void *ctx2)
 {
 	struct pw_avl_node *node = el;
 	struct csh_var *var = (void *)node->data;
+	char keybuf[128];
+	const char *val;
 
-	switch (var->type) {
-	case CSH_T_STRING:
-		csh_cfg_save_s(var->key, var->s.buf, false);
-		break;
-	case CSH_T_DYN_STRING:
-		csh_cfg_save_s(var->key, *var->dyn_s ? *var->dyn_s : "", false);
-		break;
-	case CSH_T_INT:
-		csh_cfg_save_i(var->key, *var->i, false);
-		break;
-	case CSH_T_BOOL:
-		csh_cfg_save_i(var->key, *var->b, false);
-		break;
-	case CSH_T_DOUBLE:
-		csh_cfg_save_f(var->key, *var->d, false);
-		break;
-	default:
-		assert(false);
-		break;
-	}
+	snprintf(keybuf, sizeof(keybuf), "set %s", var->key);
+	val = csh_get(var->key);
+	csh_cfg_save_s(keybuf, val, false);
 }
 
 int
