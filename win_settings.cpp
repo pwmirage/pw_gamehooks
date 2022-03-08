@@ -99,7 +99,7 @@ d3d_try_show_settings_win(void)
 			}
 
 			if (*r_fullscreen) {
-				fullscreen_combo_cur_idx = *r_borderless ? 1 : 2;
+				fullscreen_combo_cur_idx = 1;
 			} else {
 				fullscreen_combo_cur_idx = 0;
 			}
