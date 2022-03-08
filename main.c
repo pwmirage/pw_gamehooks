@@ -662,7 +662,7 @@ hooked_pre_screenshot_render(void *this, int unk)
 
 }
 
-PATCH_JMP32(0x433e3c, hooked_pre_screenshot_render);
+PATCH_JMP32(0x434156, hooked_pre_screenshot_render);
 
 static int g_detail_map_size = 800;
 static int g_detail_map_org_size[] = { 800, 600 };
@@ -952,7 +952,7 @@ init_hooks(void)
 	patch_mem(0x492de9, "\x00", 1);
 
 	/* force screenshots via direct3d, not angellica engine */
-	//patch_mem(0x433e35, "\xeb", 1);
+	patch_mem(0x433e35, "\xeb", 1);
 
 	trampoline_fn((void **)&pw_add_chat_message, 7, hooked_add_chat_message);
 	//trampoline_fn((void **)&pw_console_cmd, 6, hooked_pw_console_cmd);
