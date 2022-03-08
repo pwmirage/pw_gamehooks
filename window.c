@@ -339,6 +339,7 @@ hooked_read_local_cfg_opt(void *unk1, const char *section, const char *name, int
 {
 	int ret = pw_read_local_cfg_opt(unk1, section, name, def_val);
 	static bool win_size_init = false;
+	int w, h;
 
 	if (!win_size_init) {
 		win_size_init = true;
@@ -349,11 +350,21 @@ hooked_read_local_cfg_opt(void *unk1, const char *section, const char *name, int
 		}
 	}
 
+	w = g_cfg.r_width;
+	h = g_cfg.r_height;
+	if (!g_cfg.r_borderless) {
+		RECT rect = { 0, 0, w, h };
+		AdjustWindowRect(&rect, 0x80ce0000, false);
+
+		w += g_cfg.r_width - (rect.right - rect.left);
+		h += g_cfg.r_height - (rect.bottom - rect.top);
+	}
+
 	if (strcmp(section, "Video") == 0) {
 		if (strcmp(name, "RenderWid") == 0) {
-			return g_cfg.r_width;
+			return w;
 		} else if (strcmp(name, "RenderHei") == 0) {
-			return g_cfg.r_height;
+			return h;
 		} else if (strcmp(name, "FullScreen") == 0) {
 			return 0;
 		} else if (strcmp(name, "WideScreen") == 0) {
