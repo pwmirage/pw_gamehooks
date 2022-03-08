@@ -126,6 +126,7 @@ mg_input_action_to_str(int id)
 	case HOTKEY_A_HELP: return "Show/hide help window";
 	case HOTKEY_A_GM_CONSOLE: return "Show/hide GM console";
 	case HOTKEY_A_SELECT_MOB: return "Select nearest mob";
+	case HOTKEY_A_CAMERA_MODE: return "Toggle camera mode";
 	default: break;
 	}
 

@@ -28,6 +28,8 @@
 #endif
 
 static struct {
+	int _shadow_r_x;
+	int _shadow_r_y;
 	int r_x;
 	int r_y;
 	int r_width;
@@ -37,6 +39,8 @@ static struct {
 	bool r_render_nofocus;
 } g_cfg;
 
+CSH_REGISTER_VAR_I("_shadow_r_x", &g_cfg._shadow_r_x, -1);
+CSH_REGISTER_VAR_I("_shadow_r_y", &g_cfg._shadow_r_y, -1);
 CSH_REGISTER_VAR_I("r_x", &g_cfg.r_x, -1);
 CSH_REGISTER_VAR_I("r_y", &g_cfg.r_y, -1);
 CSH_REGISTER_VAR_I("r_width", &g_cfg.r_width, 1024);
@@ -207,6 +211,16 @@ on_window_size_pos_changed(int id)
 
 CSH_REGISTER_VAR_CALLBACK("r_x")(void) { on_window_size_pos_changed(DIM_CHANGE_X); }
 CSH_REGISTER_VAR_CALLBACK("r_y")(void) { on_window_size_pos_changed(DIM_CHANGE_Y); }
+CSH_REGISTER_VAR_CALLBACK("_shadow_r_x")(void) {
+	/* set r_x without csh_set() so it doesn't get saved to cfg */
+	g_cfg.r_x = g_cfg._shadow_r_x;
+	on_window_size_pos_changed(DIM_CHANGE_X);
+}
+CSH_REGISTER_VAR_CALLBACK("_shadow_r_y")(void) {
+	/* set r_x without csh_set() so it doesn't get saved to cfg */
+	g_cfg.r_y = g_cfg._shadow_r_y;
+	on_window_size_pos_changed(DIM_CHANGE_Y);
+}
 CSH_REGISTER_VAR_CALLBACK("r_width")(void) { on_window_size_pos_changed(DIM_CHANGE_WIDTH); }
 CSH_REGISTER_VAR_CALLBACK("r_height")(void) { on_window_size_pos_changed(DIM_CHANGE_HEIGHT); }
 
@@ -267,8 +281,8 @@ hooked_on_windows_move(uint32_t lparam)
     int16_t y = lparam >> 16;
 
     if (!shadow_x) {
-        shadow_x = mem_region_get_i32("_shadow_r_x");
-		shadow_y = mem_region_get_i32("_shadow_r_y");
+        shadow_x = mem_region_get_i32("_shadow__shadow_r_x");
+		shadow_y = mem_region_get_i32("_shadow__shadow_r_y");
 	}
 
     if (g_window && !g_border_size_set) {
@@ -282,6 +296,8 @@ hooked_on_windows_move(uint32_t lparam)
 
 	g_cfg.r_x = x - bw;
 	g_cfg.r_y = y - bh;
+	g_cfg._shadow_r_x = g_cfg.r_x;
+	g_cfg._shadow_r_y = g_cfg.r_y;
 	*shadow_x = g_cfg.r_x;
 	*shadow_y = g_cfg.r_y;
 }
@@ -636,8 +652,10 @@ window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
             (LONG)hooked_event_handler);
 	*mem_region_get_u32("win_event_handler") = g_orig_event_handler;
 
-	*mem_region_get_i32("_shadow_r_x") = x;
-	*mem_region_get_i32("_shadow_r_y") = y;
+	g_cfg._shadow_r_x = x;
+	g_cfg._shadow_r_y = y;
+	*mem_region_get_i32("_shadow__shadow_r_x") = x;
+	*mem_region_get_i32("_shadow__shadow_r_y") = y;
 	*mem_region_get_i32("_shadow_r_width") = w;
 	*mem_region_get_i32("_shadow_r_height") = h;
 

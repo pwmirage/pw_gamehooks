@@ -139,9 +139,9 @@ d3d_try_show_settings_win(void)
 			if (ImGui::BeginTable("pos_table", 2)) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGuiW_InputIntShadowFocusVar("r_x", "Pos. x:");
+				ImGuiW_InputIntShadowFocusVar("_shadow_r_x", "Pos. x:");
 				ImGui::TableNextColumn();
-				ImGuiW_InputIntShadowFocusVar("r_y", "Pos. y:");
+				ImGuiW_InputIntShadowFocusVar("_shadow_r_y", "Pos. y:");
 
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
@@ -224,18 +224,18 @@ d3d_try_show_settings_win(void)
 	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3);
 
 	if (ImGui::Button("Save", {80, 22})) {
-		if (!save_pos_to_cfg) {
-			csh_set_i("r_x", *mem_region_get_i32("loaded_r_x"));
-			csh_set_i("r_y", *mem_region_get_i32("loaded_r_y"));
+		if (save_pos_to_cfg) {
+			csh_set_i("r_x", csh_get_i("_shadow_r_x"));
+			csh_set_i("r_y", csh_get_i("_shadow_r_y"));
 		}
 		csh_save("..\\patcher\\game.cfg");
-		g_settings_show = false;
+		//g_settings_show = false;
 	}
 
 	ImGui::SameLine();
 
 	if (ImGui::Button("Revert", {80, 22})) {
-		g_settings_show = false;
+		//g_settings_show = false;
 	}
 
 	ImGui::SameLine();
