@@ -294,6 +294,7 @@ void pw_vlog_acolor(unsigned argb_color, const char *fmt, va_list args);
 void pw_log_acolor(unsigned argb_color, const char *fmt, ...);
 void pw_log_color(unsigned rgb_color, const char *fmt, ...);
 void pw_log(const char *fmt, ...);
+void pw_debuglog(int severity, const char *fmt, ...);
 int parse_console_cmd(const char *in, char *out, size_t outlen);
 
 #ifdef __cplusplus

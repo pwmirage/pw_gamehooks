@@ -19,6 +19,7 @@
 
 #include "common.h"
 #include "d3d.h"
+#include "csh.h"
 
 HMODULE g_game;
 HWND g_window;
@@ -87,6 +88,23 @@ void
 pw_log(const char *fmt, ...)
 {
 	va_list args;
+
+	va_start(args, fmt);
+	pw_vlog_acolor(0xFFFFFFFF, fmt, args);
+	va_end(args);
+}
+
+static int g_log_level = 0;
+CSH_REGISTER_VAR_I("d_loglevel", &g_log_level);
+
+void
+pw_debuglog(int severity, const char *fmt, ...)
+{
+	va_list args;
+
+	if (severity > g_log_level) {
+		return;
+	}
 
 	va_start(args, fmt);
 	pw_vlog_acolor(0xFFFFFFFF, fmt, args);

@@ -79,7 +79,7 @@ on_ui_change(const char *ctrl_name, struct ui_dialog *dialog)
 {
 	unsigned __stdcall (*real_fn)(const char *, void *) = (void *)0x6c9670;
 
-	pw_log("ctrl: %s, win: %s\n", ctrl_name, dialog->name);
+	pw_debuglog(1, "ctrl: %s, win: %s\n", ctrl_name, dialog->name);
 
 	if (strncmp(dialog->name, "Win_Setting", strlen("Win_Setting")) == 0 && strcmp(ctrl_name, "customsetting") == 0) {
 		g_settings_show = true;
@@ -217,7 +217,7 @@ static void __thiscall
 hooked_add_chat_message(void *cecgamerun, const wchar_t *str, char channel, int player_id, const wchar_t *name, char unk, char emote)
 {
 	if (channel == 12) {
-		pw_log("received (%d): %S", channel, str);
+		pw_debuglog(1, "received (%d): %S", channel, str);
 		if (wcscmp(str, L"update") == 0) {
 			g_update_show = true;
 		}
@@ -603,7 +603,7 @@ hooked_fixup_item_merging(void *frame)
 
 	ok = cmd_slot_amount == slot_amount && cmd_last_slot == last_slot;
 	if (!ok) {
-		pw_log("re-syncing pack %d state", pack);
+		pw_debuglog(1, "re-syncing pack %d state", pack);
 		void (*refresh_inv_fn)(char inv_id) = (void *)0x5a85f0;
 		refresh_inv_fn(pack);
 	}
@@ -733,7 +733,7 @@ hooked_on_world_map_click(void *stack)
 	float *x = stack + 0x20;
 	float *y = stack + 0x10;
 
-	pw_log("hooked_on_world_map_click x=%0.4f, y=%0.4f", *x, *y);
+	pw_debuglog(1, "hooked_on_world_map_click x=%0.4f, y=%0.4f", *x, *y);
 }
 
 TRAMPOLINE(0x50c42b, 6, " \

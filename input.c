@@ -591,7 +591,7 @@ hooked_pw_on_keydown(struct ui_manager *ui_man, int event, int keycode, unsigned
 	action = get_mapped_action(event, keycode);
 
 	if (event == WM_KEYDOWN || event == WM_SYSKEYDOWN) {
-		pw_log("event=0x%x (%s), mods=%x => 0x%x (%s)", keycode, mg_input_to_str(keycode),
+		pw_debuglog(1, "event=0x%x (%s), mods=%x => 0x%x (%s)", keycode, mg_input_to_str(keycode),
 				mods, action, mg_input_action_to_str(action));
 	}
 	switch (action) {
