@@ -338,6 +338,16 @@ static int __thiscall
 hooked_read_local_cfg_opt(void *unk1, const char *section, const char *name, int def_val)
 {
 	int ret = pw_read_local_cfg_opt(unk1, section, name, def_val);
+	static bool win_size_init = false;
+
+	if (!win_size_init) {
+		win_size_init = true;
+
+		if (g_cfg.r_fullscreen) {
+			g_cfg.r_width = GetSystemMetrics(SM_CXFULLSCREEN);
+			g_cfg.r_height = GetSystemMetrics(SM_CYFULLSCREEN);
+		}
+	}
 
 	if (strcmp(section, "Video") == 0) {
 		if (strcmp(name, "RenderWid") == 0) {
@@ -362,14 +372,11 @@ hooked_save_local_cfg_opt(void *unk1, const char *section, const char *name, int
 	bool ret = pw_save_local_cfg_opt(unk1, section, name, val);
 
 	if (strcmp(name, "RenderWid") == 0) {
-		csh_set_i("r_width", val);
+		;
 	} else if (strcmp(name, "RenderHei") == 0) {
-		csh_set_i("r_height", val);
+		;
 	} else if (strcmp(name, "FullScreen") == 0) {
-		if (g_cfg.r_borderless) {
-			val = g_cfg.r_fullscreen;
-		}
-		csh_set_i("r_fullscreen", val);
+		;
 	}
 	return ret;
 }
@@ -598,54 +605,36 @@ window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 {
 	int rc;
 	int styles;
+	int x = g_cfg.r_x;
+	int y = g_cfg.r_y;
 
-	int x = csh_get_i("r_x");
-	int y = csh_get_i("r_y");
-	int w = csh_get_i("r_width");
-	int h = csh_get_i("r_height");
-	bool is_fullscreen = csh_get_b("r_fullscreen");
-	bool is_borderless = csh_get_b("r_borderless");
-
-	if (w == -1 && h == -1) {
-		w = *(int *)0x927d82;
-		h = *(int *)0x927d86;
-	} else {
-		*(int *)0x927d82 = w;
-		*(int *)0x927d86 = h;
-	}
-
-	if (is_fullscreen && is_borderless) {
+	if (g_cfg.r_borderless) {
 		styles = 0x80000000;
 	} else {
 		styles = 0x80ce0000;
 	}
 
-
-	if (!is_fullscreen) {
-		RECT rect = { 0, 0, w, h };
+	if (!g_cfg.r_fullscreen && x == -1 && y == -1) {
+		RECT rect = { 0, 0, g_cfg.r_width, g_cfg.r_height };
 		AdjustWindowRect(&rect, styles, false);
 
-		w = rect.right - rect.left;
-		h = rect.bottom - rect.top;
-		if (x == -1 && y == -1) {
-			x = (GetSystemMetrics(SM_CXFULLSCREEN) - w) / 2;
-			y = (GetSystemMetrics(SM_CYFULLSCREEN) - h) / 2;
-		}
-	} else if (x == -1 && y == -1) {
+		int w2 = rect.right - rect.left;
+		int h2 = rect.bottom - rect.top;
+		x = (GetSystemMetrics(SM_CXFULLSCREEN) - w2) / 2;
+		y = (GetSystemMetrics(SM_CYFULLSCREEN) - h2) / 2;
+	} else {
 		x = 0;
 		y = 0;
 	}
 
 	g_window = CreateWindowEx(0, "ElementClient Window", "PW Mirage", styles,
-			x, y, w, h, NULL, NULL, hinstance, NULL);
+			x, y, g_cfg.r_width, g_cfg.r_height, NULL, NULL, hinstance, NULL);
 	if (!g_window) {
 		return false;
 	}
 
-	if (is_borderless) {
-		patch_mem_u32(0x40beb5, 0x80000000);
-		patch_mem_u32(0x40beac, 0x80000000);
-	}
+	patch_mem_u32(0x40beb5, styles);
+	patch_mem_u32(0x40beac, styles);
 
 	/* hook into PW input handling */
 	g_orig_event_handler = (WNDPROC)SetWindowLong(g_window, GWL_WNDPROC,
@@ -654,13 +643,15 @@ window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 
 	g_cfg._shadow_r_x = x;
 	g_cfg._shadow_r_y = y;
-	*mem_region_get_i32("_shadow__shadow_r_x") = x;
-	*mem_region_get_i32("_shadow__shadow_r_y") = y;
-	*mem_region_get_i32("_shadow_r_width") = w;
-	*mem_region_get_i32("_shadow_r_height") = h;
-
 	csh_var_set_modified("r_x", false);
 	csh_var_set_modified("r_y", false);
+	*mem_region_get_i32("_shadow__shadow_r_x") = x;
+	*mem_region_get_i32("_shadow__shadow_r_y") = y;
+
+	csh_var_set_modified("r_width", false);
+	csh_var_set_modified("r_height", false);
+	*mem_region_get_i32("_shadow_r_width") = g_cfg.r_width;
+	*mem_region_get_i32("_shadow_r_height") = g_cfg.r_height;
 
 	/* used by PW */
 	*(HINSTANCE *)0x927f5c = hinstance;
