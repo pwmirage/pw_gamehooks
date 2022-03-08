@@ -684,6 +684,10 @@ csh_init(const char *file)
 		snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "%s", file);
 	}
 
+	if (access(g_csh_cfg.filename, F_OK) != 0) {
+		write_new();
+	}
+
 	csh_cfg_parse(cfg_parse_fn, NULL);
 
 	/* make sure vars don't get saved until they're modified from now on */
@@ -744,10 +748,9 @@ int
 csh_save(const char *file)
 {
 	lock();
-	snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "%s", file);
 
-	if (access(g_csh_cfg.filename, F_OK) != 0) {
-		write_new();
+	if (file) {
+		snprintf(g_csh_cfg.filename, sizeof(g_csh_cfg.filename), "%s", file);
 	}
 
 	pw_avl_foreach(g_var_avl, save_var_foreach_cb, NULL, NULL);

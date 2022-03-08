@@ -234,7 +234,7 @@ d3d_try_show_settings_win(void)
 			csh_var_set_modified("r_x", false);
 			csh_var_set_modified("r_y", false);
 		}
-		csh_save("..\\patcher\\game.cfg");
+		csh_save(NULL);
 		//g_settings_show = false;
 	}
 

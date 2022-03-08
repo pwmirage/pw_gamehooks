@@ -856,9 +856,9 @@ init_hooks(void)
 	parse_cmdline();
 
 	/* find and init some game data */
-	rc = csh_init("..\\patcher\\game.cfg");
+	rc = csh_init("..\\patcher\\config.txt");
 	if (rc != 0) {
-		MessageBox(NULL, "Can't load the config file at ../patcher/game.cfg", "Error", MB_OK);
+		MessageBox(NULL, "Can't load the config file at ../patcher/config.txt", "Error", MB_OK);
 		return rc;
 	}
 
