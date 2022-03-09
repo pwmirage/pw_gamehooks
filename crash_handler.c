@@ -401,7 +401,7 @@ init_win(const char *log)
 
 static crash_handler_cb g_crash_cb;
 static void *g_crash_ctx;
-static bool g_enabled;
+static bool g_enabled = true;
 
 APICALL void
 handle_crash(void *winapi_exception_info)
