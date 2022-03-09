@@ -206,8 +206,7 @@ set_pw_version(void)
 	pw_log_color(0x11FF00, "PW Version: %d. Hook build date: %s\n", version, HOOK_BUILD_DATE);
 
 	snwprintf(g_build, sizeof(g_build) / sizeof(wchar_t), L"");
-	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"%S", HOOK_BUILD_DATE);
-	g_version[20] = 0;
+	snwprintf(g_version, sizeof(g_version) / sizeof(wchar_t), L"");
 
 	patch_mem_u32(0x563c6c, (uintptr_t)g_version);
 	patch_mem_u32(0x563cb6, (uintptr_t)g_build);
@@ -857,11 +856,13 @@ init_prehooks(void)
 	parse_cmdline();
 
 	/* find and init some game data */
-	rc = csh_init("..\\patcher\\config.txt");
+	rc = csh_init("..\\patcher\\game.cfg");
 	if (rc != 0) {
-		MessageBox(NULL, "Can't load the config file at ../patcher/config.txt", "Error", MB_OK);
+		MessageBox(NULL, "Can't load the config file at ../patcher/game.cfg", "Error", MB_OK);
 		return rc;
 	}
+
+	return 0;
 }
 
 static int

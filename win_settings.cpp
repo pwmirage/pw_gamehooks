@@ -24,7 +24,7 @@
 
 #include "imgui.h"
 
-bool g_settings_show = true;
+bool g_settings_show = false;
 static int g_setting_action_id = HOTKEY_A_NONE;
 
 static struct {

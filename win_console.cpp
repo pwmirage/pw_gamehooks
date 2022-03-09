@@ -376,7 +376,7 @@ console_exec_cmd(const char* cmdline)
 }
 
 
-bool g_show_console = true;
+bool g_show_console = false;
 
 void
 d3d_console_toggle(void)
