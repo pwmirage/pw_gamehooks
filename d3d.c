@@ -27,6 +27,9 @@
 static void *g_device = NULL;
 ImFont *g_font13;
 
+static bool g_cfg_d3d8;
+CSH_REGISTER_VAR_B("r_d3d8", &g_cfg_d3d8);
+
 struct d3d_ptrs {
 	void (*init)(void *device);
 	void (*new_frame)(void);

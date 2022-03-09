@@ -42,7 +42,7 @@ struct find_info {
 	bool found;
 };
 
-static void 
+static void
 lookup_section(bfd *abfd, asection *sec, void *opaque_data)
 {
 	struct find_info *data = opaque_data;
@@ -50,11 +50,11 @@ lookup_section(bfd *abfd, asection *sec, void *opaque_data)
 	if (data->found)
 		return;
 
-	if (!(bfd_get_section_flags(abfd, sec) & SEC_ALLOC)) 
+	if (!(bfd_get_section_flags(abfd, sec) & SEC_ALLOC))
 		return;
 
 	bfd_vma vma = bfd_get_section_vma(abfd, sec);
-	if (data->counter < vma || vma + bfd_get_section_size(sec) <= data->counter) 
+	if (data->counter < vma || vma + bfd_get_section_size(sec) <= data->counter)
 		return;
 
 	data->found = true;
@@ -412,6 +412,10 @@ handle_crash(void *winapi_exception_info)
 	char buf[8192];
 	size_t buf_off = 0;
 
+	if (!g_enabled) {
+		return;
+	}
+
 	if (crashed) {
 		/* another crash handler is still running, don't interrupt it */
 		return;
@@ -441,9 +445,7 @@ handle_crash(void *winapi_exception_info)
 static LONG WINAPI
 winapi_crash_handler(EXCEPTION_POINTERS *ExceptionInfo)
 {
-	if (g_enabled) {
-		handle_crash(ExceptionInfo);
-	}
+	handle_crash(ExceptionInfo);
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -458,7 +460,8 @@ setup_crash_handler(crash_handler_cb cb, void *ctx)
 	SetUnhandledExceptionFilter(winapi_crash_handler);
 }
 
-APICALL void remove_crash_handler(void)
+APICALL void
+remove_crash_handler(void)
 {
 	g_enabled = false;
 }

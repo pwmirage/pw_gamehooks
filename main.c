@@ -844,14 +844,15 @@ bool window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscree
 void window_reinit(void);
 
 static int
-init_hooks(void)
+init_prehooks(void)
 {
 	int rc;
 
 	setup_crash_handler(append_crash_info_cb, NULL);
 
-	g_game_thr_queue = ring_buffer_sp_sc_new(32);
-	assert(g_game_thr_queue != NULL);
+	/* replace the PW exception handler */
+	patch_mem(0x417aba, "\xe9", 1);
+	patch_jmp32(0x417aba, (uintptr_t)hooked_exception_handler);
 
 	parse_cmdline();
 
@@ -861,7 +862,15 @@ init_hooks(void)
 		MessageBox(NULL, "Can't load the config file at ../patcher/config.txt", "Error", MB_OK);
 		return rc;
 	}
+}
 
+static int
+init_hooks(void)
+{
+	int rc;
+
+	g_game_thr_queue = ring_buffer_sp_sc_new(32);
+	assert(g_game_thr_queue != NULL);
 
 	rc = pw_item_desc_load("..\\patcher\\item_desc.data");
 	if (rc != 0) {
@@ -891,10 +900,6 @@ init_hooks(void)
 	/* hook into exit */
 	patch_mem(0x43b407, "\x66\x90\xe8\x00\x00\x00\x00", 7);
 	patch_jmp32(0x43b407 + 2, (uintptr_t)hooked_exit);
-
-	/* replace the exception handler */
-	patch_mem(0x417aba, "\xe9", 1);
-	patch_jmp32(0x417aba, (uintptr_t)hooked_exception_handler);
 
 	if (g_r_custom_tag_font) {
 		HMODULE gdi_full_h = GetModuleHandle("gdi32full.dll");
@@ -1011,11 +1016,45 @@ hooked_open_local_cfg(void *unk, const char *path)
 	static void * __thiscall (*org_fn)(void *unk, const char *path) = (void *)0x6fed70;
 	int rc;
 
+	rc = init_prehooks();
+	if (rc) {
+		goto out;
+	}
+
+	if (!!csh_get_i("r_d3d8") == !!GetModuleHandleA("d3d9.dll")) {
+		STARTUPINFO si = {};
+		PROCESS_INFORMATION pi = {};
+		char *c;
+
+		si.cb = sizeof(si);
+
+		if (csh_get_i("r_d3d8")) {
+			rename("d3d8.dll", "_d3d8.dll");
+		} else {
+			rename("_d3d8.dll", "d3d8.dll");
+		}
+
+		c = strstr(GetCommandLine(), "game.exe");
+		if (!c) {
+			MessageBox(NULL, "Direct3D version was changed. Please launch the game again.", "Error", MB_OK);
+			goto out;
+		}
+
+		ShellExecute(NULL, NULL, "game.exe", c + strlen("game.exe"), NULL, SW_SHOW);
+
+		rc = 1;
+		goto out;
+	}
+
 	/* increase libgamehook refcount so it's never unloaded
 	 * (mostly for debugging / hot patching) */
 	LoadLibraryA("libgamehook.dll");
 
+	d3d_hook();
+
 	rc = init_hooks();
+
+out:
 	if (rc != 0) {
 		remove_crash_handler();
 		SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -1051,13 +1090,14 @@ DllMain(HMODULE mod, DWORD reason, LPVOID _reserved)
 
 		const char dll_disable_buf[] = "\x83\xc4\x04\x83\xc8\xff";
 
-		d3d_hook();
-
 		if (memcmp((void *)(uintptr_t)0x43abd9, dll_disable_buf, 6) == 0) {
-			rc = init_hooks();
+			rc = init_prehooks();
+			rc = rc || init_hooks();
 			if (rc != 0) {
 				return 0;
 			}
+
+			d3d_hook();
 
 			g_window = *(HWND *)(uintptr_t)0x927f60;
 			_patch_jmp32_unsafe(0x42bfa1, (uintptr_t)hooked_pw_game_tick_init);
