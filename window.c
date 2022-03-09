@@ -345,8 +345,12 @@ hooked_read_local_cfg_opt(void *unk1, const char *section, const char *name, int
 		win_size_init = true;
 
 		if (g_cfg.r_fullscreen) {
-			g_cfg.r_width = GetSystemMetrics(SM_CXFULLSCREEN);
-			g_cfg.r_height = GetSystemMetrics(SM_CYFULLSCREEN);
+			g_cfg.r_width = GetSystemMetrics(SM_CXSCREEN);
+			g_cfg.r_height = GetSystemMetrics(SM_CYSCREEN);
+			csh_var_set_modified("r_width", false);
+			csh_var_set_modified("r_height", false);
+			*mem_region_get_i32("_shadow_r_width") = g_cfg.r_width;
+			*mem_region_get_i32("_shadow_r_height") = g_cfg.r_height;
 		}
 	}
 
@@ -658,11 +662,6 @@ window_hooked_init(HINSTANCE hinstance, int do_show, bool _org_is_fullscreen)
 	csh_var_set_modified("r_y", false);
 	*mem_region_get_i32("_shadow__shadow_r_x") = x;
 	*mem_region_get_i32("_shadow__shadow_r_y") = y;
-
-	csh_var_set_modified("r_width", false);
-	csh_var_set_modified("r_height", false);
-	*mem_region_get_i32("_shadow_r_width") = g_cfg.r_width;
-	*mem_region_get_i32("_shadow_r_height") = g_cfg.r_height;
 
 	/* used by PW */
 	*(HINSTANCE *)0x927f5c = hinstance;
