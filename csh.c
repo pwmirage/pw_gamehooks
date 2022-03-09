@@ -47,7 +47,7 @@ write_new(void)
 
 	#define GC_W(S) fputs(S "\r\n", fp)
 
-	GC_W("# PW Mirage Client Config");
+	GC_W("# PW Mirage Game Config");
 	GC_W("# This is a list of configuration commands. The same commands can be typed");
 	GC_W("# into the built-in console inside the game (Shift + ~). Putting them here");
 	GC_W("# simply makes them execute at launch.");
@@ -65,25 +65,25 @@ write_new(void)
 	GC_W("# Changing ingame settings will modify this file. The conflicting commands");
 	GC_W("# may be updated, or new overriding rules might be added to the end of file.");
 	GC_W("");
-	GC_W("set d3d8 0");
+	GC_W("set r_d3d8 0");
 	GC_W("set r_render_nofocus 1");
 	GC_W("set r_head_hp_bar 0");
 	GC_W("set r_head_mp_bar 0");
 	GC_W("");
 	GC_W("if [ \"$PROFILE\" == \"Secondary\" ]; then");
+	GC_W("\tset r_fullscreen 0");
 	GC_W("\tset r_x 10");
 	GC_W("\tset r_y 10");
 	GC_W("\tset r_width 1297");
 	GC_W("\tset r_height 731");
-	GC_W("\tset r_fullscreen 0");
 	GC_W("fi");
 	GC_W("");
 	GC_W("if [ \"$PROFILE\" == \"Tertiary\" ]; then");
+	GC_W("\tset r_fullscreen 0");
 	GC_W("\tset r_x 960");
 	GC_W("\tset r_y 0");
 	GC_W("\tset r_width 960");
 	GC_W("\tset r_height 1040");
-	GC_W("\tset r_fullscreen 1");
 	GC_W("\tset r_borderless 1");
 	GC_W("fi");
 	GC_W("");
